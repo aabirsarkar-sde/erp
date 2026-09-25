@@ -1,0 +1,31 @@
+import "server-only";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { cache } from "react";
+import { eq } from "drizzle-orm";
+import { db, users } from "@/db";
+import { SESSION_COOKIE, verifySession } from "./session";
+
+export const getCurrentUser = cache(async () => {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  const s = await verifySession(token);
+  if (!s) return null;
+  const u = await db.query.users.findFirst({ where: eq(users.id, s.uid) });
+  if (!u || !u.active) return null;
+  const { passwordHash: _ph, ...safe } = u;
+  return safe;
+});
+
+export async function requireUser() {
+  const u = await getCurrentUser();
+  if (!u) redirect("/login");
+  return u;
+}
+
+export async function requireAdmin() {
+  const u = await requireUser();
+  if (u.role !== "admin") redirect("/");
+  return u;
+}
+
+export type CurrentUser = NonNullable<Awaited<ReturnType<typeof getCurrentUser>>>;
