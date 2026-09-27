@@ -3,8 +3,8 @@ import { requireUser } from "@/lib/auth";
 import { listTickets, lookups, type TicketFilters as F, type TicketRow } from "@/lib/queries";
 import { TicketFilters } from "@/components/ticket-filters";
 import { PageHeader, StageBadge, PriorityFlag, Avatar, Empty, LinkButton } from "@/components/ui";
-import { STAGE_META, ticketRef } from "@/lib/constants";
-import { timeAgo } from "@/lib/format";
+import { STAGE_META, ticketRef, typeMeta } from "@/lib/constants";
+import { timeAgo, fmtTat, fmtDate } from "@/lib/format";
 import { STAGES } from "@/db/schema";
 import { IconPlus } from "@/components/icons";
 
@@ -19,7 +19,15 @@ export default async function TicketsPage({ searchParams }: { searchParams: Prom
 
   return (
     <div className="mx-auto max-w-7xl">
-      <PageHeader title="Tickets" subtitle={`${rows.length} ticket${rows.length === 1 ? "" : "s"}`} actions={<LinkButton href="/tickets/new"><IconPlus className="size-4" />New ticket</LinkButton>} />
+      <PageHeader
+        title="Tickets"
+        subtitle={`${rows.length} ticket${rows.length === 1 ? "" : "s"}`}
+        actions={<>
+          <a href={`/api/export/tickets?${new URLSearchParams(sp as Record<string, string>)}&format=xlsx`} className="btn-secondary">Excel</a>
+          <a href={`/print/tickets?${new URLSearchParams(sp as Record<string, string>)}`} target="_blank" className="btn-secondary">PDF</a>
+          <LinkButton href="/tickets/new"><IconPlus className="size-4" />New complaint</LinkButton>
+        </>}
+      />
       <TicketFilters teams={lk.teams} users={lk.users} />
       {rows.length === 0 ? (
         <Empty title="No tickets match these filters" hint="Try clearing a filter or searching for something else." />
@@ -45,12 +53,12 @@ function List({ rows }: { rows: TicketRow[] }) {
         <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
           <tr>
             <th className="px-4 py-2.5">Ticket</th>
-            <th className="px-3 py-2.5">Customer</th>
+            <th className="px-3 py-2.5">Plant / customer</th>
             <th className="px-3 py-2.5">Team</th>
             <th className="px-3 py-2.5">Stage</th>
             <th className="px-3 py-2.5">Priority</th>
             <th className="px-3 py-2.5">Assignee</th>
-            <th className="px-4 py-2.5 text-right">Created</th>
+            <th className="px-4 py-2.5 text-right">Reported · TAT</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-slate-100">
@@ -63,17 +71,17 @@ function List({ rows }: { rows: TicketRow[] }) {
                     <Overdue t={t} />
                     {!t.firstResponseAt && t.stage === "new" && <span className="size-2 shrink-0 rounded-full bg-amber-400" title="No reply yet" />}
                   </div>
-                  <div className="text-xs text-slate-500">{ticketRef(t.id)}{t.category ? ` · ${t.category}` : ""}</div>
+                  <div className="text-xs text-slate-500">{ticketRef(t.id)}{t.category ? ` · ${typeMeta(t.category).icon} ${t.category}` : ""}</div>
                 </Link>
               </td>
-              <td className="max-w-[14rem] truncate px-3 py-3 text-slate-600">{t.customerName ?? "—"}</td>
+              <td className="max-w-[16rem] px-3 py-3 text-slate-600"><div className="truncate">{t.plantNo ? <span className="font-mono text-xs font-semibold text-slate-800">{t.plantNo} </span> : null}{t.plantName ?? ""}</div><div className="truncate text-xs text-slate-500">{t.customerName ?? "—"}</div></td>
               <td className="px-3 py-3 text-slate-600">{t.teamName}</td>
               <td className="px-3 py-3"><StageBadge stage={t.stage} /></td>
               <td className="px-3 py-3"><PriorityFlag p={t.priority} /></td>
               <td className="px-3 py-3">
                 <span className="flex items-center gap-2 text-slate-600"><Avatar name={t.assigneeName} size="sm" /><span className="truncate">{t.assigneeName ?? "Unassigned"}</span></span>
               </td>
-              <td className="whitespace-nowrap px-4 py-3 text-right text-xs text-slate-500">{timeAgo(t.createdAt)}</td>
+              <td className="whitespace-nowrap px-4 py-3 text-right text-xs text-slate-500">{fmtDate(t.reportedAt ?? t.createdAt)}{t.tatMinutes != null && <div className="font-medium text-emerald-700">TAT {fmtTat(t.tatMinutes)}</div>}</td>
             </tr>
           ))}
         </tbody>
@@ -86,12 +94,12 @@ function List({ rows }: { rows: TicketRow[] }) {
                 <span className="font-medium leading-snug">{t.subject}</span>
                 <Avatar name={t.assigneeName} size="sm" />
               </div>
-              <div className="mt-0.5 truncate text-xs text-slate-500">{ticketRef(t.id)} · {t.customerName ?? "No customer"} · {t.teamName}</div>
+              <div className="mt-0.5 truncate text-xs text-slate-500">{ticketRef(t.id)} · {t.plantNo ? `${t.plantNo} · ` : ""}{t.customerName ?? "No customer"} · {t.teamName}</div>
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <StageBadge stage={t.stage} />
                 <PriorityFlag p={t.priority} />
                 <Overdue t={t} />
-                <span className="ml-auto text-xs text-slate-400">{timeAgo(t.createdAt)}</span>
+                <span className="ml-auto text-xs text-slate-400">{t.tatMinutes != null ? `TAT ${fmtTat(t.tatMinutes)}` : timeAgo(t.createdAt)}</span>
               </div>
             </Link>
           </li>

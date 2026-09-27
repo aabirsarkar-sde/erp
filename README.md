@@ -59,6 +59,38 @@ What's included:
 
 Photos are shrunk in the browser before upload, to roughly 100–300 KB each. Files are stored in `./uploads` locally. In production they go to Vercel Blob if `BLOB_READ_WRITE_TOKEN` is set (free tier). Downloads require being logged in.
 
+## Helpdesk workflow (client spec, Sep 2026)
+
+1. **Log the complaint.** Open the Calendar and click **+ Complaint** (or "+ complaint" on a day), or use Tickets → New complaint. On the standard form, fill in:
+   - The date.
+   - The **plant number**, which fills in the customer, zone and city.
+   - The **type**: Electrical, Mechanical, Feed water quality, Instrumentation, Membrane, Manpower or Other.
+   - The narration.
+   - Who complained.
+2. **See it.** The ticket appears on the calendar on that date and in the ticket list. Rochem HO (Settings → HO emails) and the complainant follow it automatically.
+3. **Work it.**
+   - Replies, canned replies and internal notes.
+   - **Transfer** to another person with a reason; both people are emailed.
+   - **Email ticket**: send the full details and conversation to anyone.
+   - Email replies to `[TKT-xxxx]` come back into the ticket. **Email thread** shows only the mail chain.
+4. **Close it.** Add a resolution note and an optional customer signature. The **TAT (turn-around time)** is stamped, and followers get a closure mail with a 1-click rating link.
+5. **Dashboard** (Helpdesk → Helpdesk dashboard):
+   - Average TAT, and totals per complaint type.
+   - Views by type, zone, geography, employee (tickets solved) and plant.
+   - **Excel** and **PDF** export.
+6. **Extras:**
+   - Customer complaint portal at `/complaint`, with status check at `/complaint/status`.
+   - Daily escalation email for overdue or unassigned tickets (Vercel Cron; set `CRON_SECRET`).
+   - Plants master (`/plants`), importable from CSV.
+
+## Moving data over from Odoo
+
+Log in as admin and go to Settings → Import from Odoo. Import **contacts first**, then opportunities, then tickets. On each screen, the Odoo list view's Export button gives a CSV. The import page says which columns to tick for each.
+
+## Calendar sync
+
+On the Calendar page, open "Sync with Outlook, Google or Apple Calendar" and copy your private link. The link only works once the app is online (not localhost). Set `APP_URL` in `.env` to the public address.
+
 ## Commands
 
 | Command | What it does |
@@ -98,4 +130,13 @@ scripts/seed.ts           sample data
   - Printable A4 quotation that can be saved as PDF, using company details from Settings.
 - **P2 Mobile app:** Expo app on the same backend. The web app is already mobile-friendly and installable.
 - **P3 AI:** done. See the AI section above.
-- **P4 The rest:** calendar with Outlook sync, documents, dashboards, and data import from Odoo.
+- **P4 The rest:** done.
+  - **Calendar:**
+    - Week view, month view, and a phone agenda. Meetings have team attendees and outside guests.
+    - Emailed invites (.ics) that show accept/decline in Outlook and Gmail.
+    - Follow-ups appear alongside meetings.
+    - A private link to subscribe from Outlook, Google or Apple Calendar.
+  - **Discuss:** #general, #sales and #service channels plus direct messages. Unread badges; `TKT-0012` becomes a link and `@Name` highlights the person.
+  - **Documents:** folders, drag-and-drop upload, linking to customers, search.
+  - **Insights:** management charts (tickets trend, open tickets by team, pipeline by stage, won revenue by month, activity per person).
+  - **Import from Odoo:** Settings → Import. Takes the CSV exports for contacts, opportunities and tickets, maps the columns automatically, and is safe to re-run.

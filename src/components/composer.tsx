@@ -6,7 +6,7 @@ import { FilePicker } from "./file-picker";
 import { aiDraftReply } from "@/app/actions/ai";
 import { AiButton } from "./ai-ui";
 
-export function Composer({ ticketId, customerEmail, ai }: { ticketId: number; customerEmail: string | null; ai?: boolean }) {
+export function Composer({ ticketId, customerEmail, ai, canned = [], fill = {} }: { ticketId: number; customerEmail: string | null; ai?: boolean; canned?: { id: number; title: string; body: string }[]; fill?: Record<string, string> }) {
   const [kind, setKind] = useState<"reply" | "note">("note");
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
@@ -56,6 +56,12 @@ export function Composer({ ticketId, customerEmail, ai }: { ticketId: number; cu
       <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-3 py-2">
         <div className="flex flex-wrap items-center gap-1.5">
           <FilePicker files={files} setFiles={setFiles} />
+          {canned.length > 0 && (
+            <select value="" onChange={(e) => { const c = canned.find((x) => String(x.id) === e.target.value); if (c && bodyRef.current) { bodyRef.current.value = c.body.replace(/\{(\w+)\}/g, (_, k) => fill[k] ?? `{${k}}`); setKind("reply"); bodyRef.current.focus(); } }} className="input w-auto py-1 text-xs">
+              <option value="">Canned reply…</option>
+              {canned.map((c) => <option key={c.id} value={c.id}>{c.title}</option>)}
+            </select>
+          )}
           {ai && <AiButton onClick={draft} busy={drafting} className="px-2.5 py-1 text-xs">Draft reply</AiButton>}
           {aiErr && <span className="text-xs text-red-600">{aiErr}</span>}
         </div>

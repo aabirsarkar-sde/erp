@@ -23,3 +23,8 @@ export const IconFunnel = base(<path d="M3 4h18l-7 9v6l-4 2v-8z" />);
 export const IconCheck = base(<><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 10h18M9 15l2 2 4-4" /></>);
 export const IconDoc = base(<><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" /><path d="M14 3v6h6M8 13h8M8 17h5" /></>);
 export const IconMenu = base(<path d="M4 6h16M4 12h16M4 18h16" />);
+export const IconCalendar = base(<><rect x="3" y="4" width="18" height="17" rx="2" /><path d="M8 2v4M16 2v4M3 10h18" /></>);
+export const IconChat = base(<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />);
+export const IconFolder = base(<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />);
+export const IconTrend = base(<><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></>);
+export const IconFactory = base(<><path d="M3 21V10l6 4V10l6 4V6l6 3v12z" /><path d="M7 17h2M13 17h2M17 17h2" /></>);

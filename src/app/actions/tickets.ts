@@ -1,14 +1,16 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { fromLocalInput, localDateKey } from "@/lib/tz";
 import { z } from "zod";
-import { db, tickets, messages, teams, users, contacts, attachments, STAGES } from "@/db";
+import { db, tickets, messages, teams, users, contacts, attachments, plants, ticketWatchers, STAGES } from "@/db";
 import { requireUser } from "@/lib/auth";
 import { PRIORITIES, STAGE_META } from "@/lib/constants";
 import { saveFile, MAX_UPLOAD } from "@/lib/storage";
 import { getSla } from "@/lib/sla";
-import { notifyAssigned, emailReplyToCustomer } from "@/lib/notify";
+import { notifyAssigned, emailReplyToCustomer, notifyNewTicket, autoWatchers, notifyClosed, notifyTransfer, emailTicket } from "@/lib/notify";
+import { fmtTat } from "@/lib/format";
 
 const optInt = z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nullable());
 const optStr = z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : null), z.string().nullable());
@@ -36,16 +38,18 @@ function checkFiles(files: File[]) {
 }
 
 const createSchema = z.object({
-  subject: z.string().trim().min(3, "Subject is too short"),
-  description: optStr,
-  teamId: z.coerce.number({ message: "Pick a team" }).int().positive("Pick a team"),
-  assigneeId: optInt,
+  reportedAt: z.string().min(8, "Pick the complaint date"),
+  plantId: optInt,
   customerId: optInt,
-  contactName: optStr,
-  contactPhone: optStr,
-  contactEmail: optStr,
+  teamId: optInt,
+  category: z.string().min(1, "Choose the type of complaint"),
+  description: z.string().trim().min(5, "Write the narration — what exactly is the problem?"),
+  complainantName: z.string().trim().min(2, "Who is making the complaint?"),
+  complainantPhone: optStr,
+  complainantEmail: optStr,
+  subject: optStr,
+  assigneeId: optInt,
   priority: z.coerce.number().int().min(0).max(3),
-  category: optStr,
   site: optStr,
   tags: optStr,
   dueAt: optStr,
@@ -60,34 +64,61 @@ export async function createTicket(_prev: { error?: string } | undefined, fd: Fo
   const fileErr = checkFiles(files);
   if (fileErr) return { error: fileErr };
   const d = parsed.data;
-  let contactId: number | null = null;
-  if (d.contactName || d.contactEmail) {
-    const [c] = await db.insert(contacts).values({ name: d.contactName || d.contactEmail!, phone: d.contactPhone, email: d.contactEmail, customerId: d.customerId }).returning();
-    contactId = c!.id;
-  }
+  const plant = d.plantId ? await db.query.plants.findFirst({ where: eq(plants.id, d.plantId) }) : null;
+  const customerId = plant?.customerId ?? d.customerId;
+  const teamId = plant?.teamId ?? d.teamId;
+  if (!plant && !customerId) return { error: "Select the plant (or the customer if the plant isn't listed)." };
+  if (!teamId) return { error: "This plant has no zone yet — pick a support team." };
+  const contactId = await upsertContact(d.complainantName, d.complainantPhone, d.complainantEmail, customerId ?? null);
   const sla = await getSla();
+  // today → now; a past date → 9:00 that day (so TAT isn't inflated from midnight)
+  const picked = d.reportedAt.slice(0, 10);
+  const reportedAt = picked === localDateKey(new Date()) ? new Date() : fromLocalInput(`${picked}T09:00`) ?? new Date();
+  const subject = d.subject || `${d.category} — ${plant ? `${plant.plantNo} ${plant.name}` : "complaint"}`;
   const [t] = await db
     .insert(tickets)
     .values({
-      subject: d.subject,
+      subject,
       description: d.description,
-      teamId: d.teamId,
-      assigneeId: d.assigneeId,
-      customerId: d.customerId,
-      contactId,
-      priority: d.priority,
       category: d.category,
-      site: d.site,
+      teamId,
+      assigneeId: d.assigneeId,
+      customerId: customerId ?? null,
+      contactId,
+      plantId: plant?.id ?? null,
+      complainantName: d.complainantName,
+      complainantPhone: d.complainantPhone,
+      complainantEmail: d.complainantEmail,
+      reportedAt,
+      priority: d.priority,
+      site: d.site ?? plant?.name ?? null,
       tags: d.tags,
       dueAt: d.dueAt ? new Date(d.dueAt) : new Date(Date.now() + sla.resolution[d.priority]! * 3600e3),
       createdById: me.id,
+      source: "internal",
     })
     .returning();
-  const [ev] = await db.insert(messages).values({ ticketId: t!.id, authorId: me.id, kind: "event", body: "Ticket created" }).returning();
+  const [ev] = await db.insert(messages).values({ ticketId: t!.id, authorId: me.id, kind: "event", body: `Complaint logged by ${me.name} for ${d.complainantName}` }).returning();
   if (files.length) await storeFiles(files, t!.id, ev!.id, me.id);
+  if (d.complainantEmail) await db.insert(ticketWatchers).values({ ticketId: t!.id, email: d.complainantEmail.toLowerCase(), name: d.complainantName }).onConflictDoNothing();
+  await autoWatchers(t!.id);
   if (d.assigneeId) await notifyAssigned(t!.id, d.assigneeId, me.id);
+  await notifyNewTicket(t!.id);
   revalidatePath("/", "layout");
   redirect(`/tickets/${t!.id}`);
+}
+
+async function upsertContact(name: string, phone: string | null, email: string | null, customerId: number | null) {
+  const e = email?.toLowerCase() ?? null;
+  const found = e
+    ? await db.query.contacts.findFirst({ where: eq(contacts.email, e) })
+    : customerId ? await db.query.contacts.findFirst({ where: and(eq(contacts.name, name), eq(contacts.customerId, customerId)) }) : null;
+  if (found) {
+    if ((phone && !found.phone) || (customerId && !found.customerId)) await db.update(contacts).set({ phone: found.phone ?? phone, customerId: found.customerId ?? customerId }).where(eq(contacts.id, found.id));
+    return found.id;
+  }
+  const [c] = await db.insert(contacts).values({ name, phone, email: e, customerId }).returning();
+  return c!.id;
 }
 
 const updateSchema = z.object({
@@ -123,13 +154,24 @@ async function applyChanges(id: number, meId: number, patch: Partial<typeof tick
     const t = await db.query.teams.findFirst({ where: eq(teams.id, patch.teamId) });
     events.push(`Moved to ${t?.name}`);
   }
-  const resolving = patch.stage && (patch.stage === "resolved" || patch.stage === "closed");
+  const isDone = (s?: string | null) => s === "resolved" || s === "closed";
+  const resolving = patch.stage && isDone(patch.stage);
+  const newlyClosed = resolving && !isDone(old.stage);
+  const resolvedAt = resolving ? old.resolvedAt ?? new Date() : patch.stage ? null : old.resolvedAt;
+  const tat = resolvedAt ? Math.round((+resolvedAt - +(old.reportedAt ?? old.createdAt)) / 60000) : null;
   await db
     .update(tickets)
-    .set({ ...patch, updatedAt: new Date(), resolvedAt: resolving ? old.resolvedAt ?? new Date() : patch.stage ? null : old.resolvedAt })
+    .set({
+      ...patch, updatedAt: new Date(), resolvedAt, tatMinutes: tat,
+      ...(newlyClosed ? { closedById: meId, csatToken: old.csatToken ?? crypto.randomUUID().replace(/-/g, "") } : {}),
+      ...(patch.stage && !resolving ? { closedById: null } : {}),
+    })
     .where(eq(tickets.id, id));
+  if (newlyClosed) events.push(`Closed — TAT ${fmtTat(tat)}`);
+  if (patch.stage && !resolving && isDone(old.stage)) events.push("Reopened — TAT cleared");
   if (events.length) await db.insert(messages).values(events.map((body) => ({ ticketId: id, authorId: meId, kind: "event" as const, body })));
   if (newAssignee) await notifyAssigned(id, newAssignee, meId);
+  if (newlyClosed) await notifyClosed(id);
   revalidatePath(`/tickets/${id}`);
   revalidatePath("/tickets");
   revalidatePath("/");
@@ -170,4 +212,68 @@ export async function addMessage(id: number, _prev: { ok?: boolean; error?: stri
   revalidatePath(`/tickets/${id}`);
   revalidatePath("/");
   return { ok: true, info };
+}
+
+
+export async function transferTicket(id: number, _p: { ok?: boolean; error?: string } | undefined, fd: FormData) {
+  const me = await requireUser();
+  const toId = Number(fd.get("toUserId"));
+  const reason = String(fd.get("reason") ?? "").trim() || null;
+  const t = await db.query.tickets.findFirst({ where: eq(tickets.id, id) });
+  const to = toId ? await db.query.users.findFirst({ where: eq(users.id, toId) }) : null;
+  if (!t || !to) return { error: "Pick who to transfer to." };
+  if (t.assigneeId === toId) return { error: `${to.name} already has this ticket.` };
+  const from = t.assigneeId ? await db.query.users.findFirst({ where: eq(users.id, t.assigneeId) }) : null;
+  await db.update(tickets).set({ assigneeId: toId, updatedAt: new Date() }).where(eq(tickets.id, id));
+  await db.insert(messages).values({ ticketId: id, authorId: me.id, kind: "event", body: `Transferred ${from ? `from ${from.name} ` : ""}to ${to.name}${reason ? ` — ${reason}` : ""}` });
+  await notifyTransfer(id, t.assigneeId, toId, me.name, reason);
+  revalidatePath(`/tickets/${id}`);
+  revalidatePath("/tickets");
+  return { ok: true };
+}
+
+export async function emailTicketAction(id: number, _p: { ok?: boolean; error?: string; info?: string } | undefined, fd: FormData) {
+  const me = await requireUser();
+  const to = String(fd.get("to") ?? "").split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x));
+  if (!to.length) return { error: "Enter at least one valid email address." };
+  const note = String(fd.get("note") ?? "").trim() || null;
+  const r = await emailTicket(id, to, note, me.name);
+  await db.insert(messages).values({ ticketId: id, authorId: me.id, kind: "reply", body: `📧 Ticket emailed${note ? `: ${note}` : ""}`, emailedTo: to.join(", ") });
+  if (fd.get("follow") === "on") await db.insert(ticketWatchers).values(to.map((email) => ({ ticketId: id, email }))).onConflictDoNothing();
+  revalidatePath(`/tickets/${id}`);
+  return { ok: true, info: `Sent to ${r.sent} recipient${r.sent === 1 ? "" : "s"}.` };
+}
+
+export async function addWatcher(id: number, fd: FormData) {
+  await requireUser();
+  const email = String(fd.get("email") ?? "").trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
+  await db.insert(ticketWatchers).values({ ticketId: id, email, name: String(fd.get("name") ?? "").trim() || null }).onConflictDoNothing();
+  revalidatePath(`/tickets/${id}`);
+}
+
+export async function removeWatcher(id: number, email: string) {
+  await requireUser();
+  await db.delete(ticketWatchers).where(and(eq(ticketWatchers.ticketId, id), eq(ticketWatchers.email, email)));
+  revalidatePath(`/tickets/${id}`);
+}
+
+/** Close with an optional closing note and customer sign-off (signature drawn on screen) */
+export async function resolveTicket(id: number, _p: { ok?: boolean; error?: string } | undefined, fd: FormData): Promise<{ ok?: boolean; error?: string }> {
+  const me = await requireUser();
+  const note = String(fd.get("note") ?? "").trim();
+  const signedBy = String(fd.get("signedBy") ?? "").trim() || null;
+  const sig = String(fd.get("signature") ?? "");
+  let signatureKey: string | null = null;
+  if (sig.startsWith("data:image/png;base64,")) {
+    const buf = Buffer.from(sig.slice(22), "base64");
+    if (buf.length > 200) signatureKey = await saveFile(new File([buf], `signature-${id}.png`, { type: "image/png" }));
+  }
+  if (note) await db.insert(messages).values({ ticketId: id, authorId: me.id, kind: "note", body: `Resolution: ${note}` });
+  if (signatureKey) {
+    await db.update(tickets).set({ signatureKey, signedBy }).where(eq(tickets.id, id));
+    await db.insert(messages).values({ ticketId: id, authorId: me.id, kind: "event", body: `Customer sign-off${signedBy ? ` by ${signedBy}` : ""}` });
+  }
+  await applyChanges(id, me.id, { stage: "resolved" });
+  return { ok: true };
 }

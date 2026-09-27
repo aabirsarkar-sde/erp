@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { db, aiUsage, users, teams, teamMembers, customers, contacts, tickets, messages, attachments, settings, quotationLines, quotations, products, leadNotes, activities, leads, crmStages } from "../src/db";
+import { db, plants, ticketWatchers, cannedResponses, aiUsage, events, eventAttendees, calendarTokens, channels, channelMembers, chatMessages, docFolders, documents, users, teams, teamMembers, customers, contacts, tickets, messages, attachments, settings, quotationLines, quotations, products, leadNotes, activities, leads, crmStages } from "../src/db";
 import { sql } from "drizzle-orm";
 import { seedCrm } from "./seed-crm";
 
@@ -10,7 +10,7 @@ async function main() {
     console.log("Database already has data — skipping seed (use --force to wipe & reseed).");
     return;
   }
-  for (const t of [quotationLines, quotations, products, leadNotes, activities, leads, crmStages, attachments, messages, tickets, contacts, customers, teamMembers, teams, users, settings, aiUsage]) await db.delete(t);
+  for (const t of [ticketWatchers, cannedResponses, eventAttendees, events, calendarTokens, chatMessages, channelMembers, channels, documents, docFolders, quotationLines, quotations, products, leadNotes, activities, leads, crmStages, attachments, messages, tickets, plants, contacts, customers, teamMembers, teams, users, settings, aiUsage]) await db.delete(t);
   await db.run(sql`delete from sqlite_sequence`).catch(() => {});
 
   const hash = (p: string) => bcrypt.hashSync(p, 10);
@@ -63,25 +63,35 @@ async function main() {
   const locOfCity: Record<string, string> = { Taloja: "Ahmedabad", Vapi: "Vapi and Valsad", Piparia: "Vadodara", Vadodara: "Vadodara", Jhagadia: "Jhagadia", Dahej: "Dahej", Vilayat: "Dahej", Valsad: "Vapi and Valsad", Kutch: "Ahmedabad", Surat: "Ankleshwar", Umbergaon: "Vapi and Valsad", Panoli: "Panoli", Ankleshwar: "Ankleshwar" };
 
   const subjects: [string, string, number][] = [
-    ["RO permeate TDS rising above 250 ppm", "Performance issue", 2],
-    ["MEE condenser vacuum dropping", "Plant breakdown", 3],
-    ["High-pressure pump tripping on overload", "Plant breakdown", 3],
-    ["Quarterly service visit due", "Service visit", 1],
-    ["Membrane replacement quotation requested", "Spare parts", 1],
-    ["Antiscalant dosing pump not working", "Plant breakdown", 2],
-    ["ATFD scraper blade worn out", "Spare parts", 2],
-    ["CIP chemical stock running low", "Chemical supply", 1],
-    ["AMC renewal for FY 26-27", "AMC / Warranty", 0],
-    ["Feed water turbidity spike – UF fouling", "Performance issue", 2],
-    ["Stripper column level transmitter faulty", "Plant breakdown", 2],
-    ["Operator training for new shift staff", "Service visit", 0],
-    ["ZLD recovery dropped to 88%", "Performance issue", 3],
-    ["Commissioning of 450 KLD RO skid", "Installation / Commissioning", 2],
-    ["Monthly performance report not received", "Query", 1],
-    ["PLC HMI showing communication error", "Plant breakdown", 2],
-    ["Cartridge filters choking frequently", "Performance issue", 1],
-    ["Request for spare ROCHEM disc tube modules", "Spare parts", 1],
+    ["RO permeate TDS rising above 250 ppm", "Feed water quality", 2],
+    ["MEE condenser vacuum dropping", "Mechanical", 3],
+    ["High-pressure pump tripping on overload", "Electrical", 3],
+    ["Operator absent on night shift", "Manpower", 1],
+    ["Membrane replacement required — high DP", "Membrane", 1],
+    ["Antiscalant dosing pump not working", "Mechanical", 2],
+    ["ATFD scraper blade worn out", "Mechanical", 2],
+    ["Feed turbidity spike — UF fouling", "Feed water quality", 2],
+    ["MCC panel breaker tripping", "Electrical", 2],
+    ["Conductivity transmitter reading wrong", "Instrumentation", 2],
+    ["Stripper column level transmitter faulty", "Instrumentation", 2],
+    ["Operator training for new shift staff", "Manpower", 0],
+    ["ZLD recovery dropped to 88%", "Membrane", 3],
+    ["pH analyser drifting", "Instrumentation", 1],
+    ["Monthly performance report not received", "Other", 1],
+    ["PLC HMI showing communication error", "Instrumentation", 2],
+    ["Cartridge filters choking frequently", "Feed water quality", 1],
+    ["VFD fault on HP pump", "Electrical", 3],
   ];
+  const STATE: Record<string, string> = { Taloja: "Maharashtra" };
+  const plantRows = custs.flatMap((c, i) => {
+    const short = c.name.split(/[ ,.]/)[0]!;
+    const zone = teamByLoc(locOfCity[c.city!] ?? "Ahmedabad");
+    const base = { customerId: c.id, teamId: zone.id, city: c.city, state: STATE[c.city!] ?? "Gujarat" };
+    const list = [{ ...base, plantNo: `PLT-${String(i * 2 + 1).padStart(3, "0")}`, name: `${short} ${c.city} — ZLD`, capacity: `${(i % 5 + 1) * 150} KLD`, technology: "RO + MEE + ATFD" }];
+    if (i % 2 === 0) list.push({ ...base, plantNo: `PLT-${String(i * 2 + 2).padStart(3, "0")}`, name: `${short} ${c.city} — RO`, capacity: `${(i % 4 + 1) * 100} KLD`, technology: "UF + RO" });
+    return list;
+  });
+  const pls = await db.insert(plants).values(plantRows).returning();
   const DAY = 86400;
   const now = Math.floor(Date.now() / 1000);
   const stages = ["new", "new", "in_progress", "in_progress", "waiting", "resolved", "closed"] as const;
@@ -95,14 +105,24 @@ async function main() {
     const created = now - ((i * 13) % 40) * DAY - (i % 9) * 3600;
     const assigned = i % 5 !== 0;
     const responded = stage !== "new" || i % 3 === 0;
+    const custPlants = pls.filter((p) => p.customerId === c.id);
+    const plant = custPlants[i % custPlants.length]!;
+    const resolvedAt = stage === "resolved" || stage === "closed" ? created + ((i % 6) + 1) * 7 * 3600 : null;
     rows.push({
-      subject,
+      subject: `${subject}`,
       category,
+      plantId: plant.id,
+      complainantName: ctcs[ci]!.name,
+      complainantPhone: ctcs[ci]!.phone,
+      reportedAt: new Date(created * 1000),
+      tatMinutes: resolvedAt ? Math.round((resolvedAt - created) / 60) : null,
+      closedById: resolvedAt ? (assigned ? agents[i % agents.length]!.id : aarti!.id) : null,
+      csatScore: resolvedAt && i % 3 !== 0 ? 3 + (i % 3) : null,
       priority,
       stage,
       description: `Customer reported: ${subject.toLowerCase()}. Please check at site and update.`,
-      site: `${c.name.split(" ")[0]} ${c.city} plant`,
-      teamId: team.id,
+      site: plant.name,
+      teamId: plant.teamId ?? team.id,
       assigneeId: assigned ? agents[i % agents.length]!.id : null,
       customerId: c.id,
       contactId: ctcs[ci]!.id,
@@ -110,12 +130,20 @@ async function main() {
       createdAt: new Date(created * 1000),
       updatedAt: new Date(Math.min(created + DAY, now - i * 1800) * 1000),
       firstResponseAt: responded ? new Date((created + 3 * 3600) * 1000) : null,
-      resolvedAt: stage === "resolved" || stage === "closed" ? new Date((created + 2 * DAY) * 1000) : null,
+      resolvedAt: resolvedAt ? new Date(resolvedAt * 1000) : null,
       dueAt: new Date((now + ((i % 9) - 2) * DAY) * 1000),
       tags: i % 4 === 0 ? "ROSERVE" : i % 4 === 1 ? "ROCHEM" : null,
     });
   }
   const tks = await db.insert(tickets).values(rows).returning();
+  await db.insert(settings).values({ key: "ho_emails", value: "ho@rochem.example" });
+  await db.insert(ticketWatchers).values(tks.map((t) => ({ ticketId: t.id, email: "ho@rochem.example", name: "Rochem HO" })));
+  await db.insert(cannedResponses).values([
+    { title: "Engineer assigned — visit scheduled", body: "Dear {name},\n\nThank you for reporting this. Our engineer has been assigned and will visit {plant} on [date]. We will update you after the inspection." },
+    { title: "Request operating log", body: "Dear {name},\n\nTo diagnose the issue quickly, please share the last 24 hours of operating log (feed pressure, reject pressure, permeate flow, TDS/conductivity) and any alarm screenshots." },
+    { title: "Spare dispatched", body: "Dear {name},\n\nThe required spare has been dispatched today. Docket no. [xxx]. Our engineer will install it on arrival." },
+    { title: "Resolved — please confirm", body: "Dear {name},\n\nThe issue at {plant} has been resolved. Please confirm the plant is running normally. We will close the ticket in 24 hours if we don't hear back." },
+  ]);
   const msgs = [];
   for (const t of tks) {
     msgs.push({ ticketId: t.id, authorId: aarti!.id, kind: "event" as const, body: "Ticket created", createdAt: t.createdAt });
@@ -126,9 +154,45 @@ async function main() {
   }
   await db.insert(messages).values(msgs);
   await seedCrm();
+  await seedWorkspace();
   console.log(`Seeded ${tms.length} teams, ${custs.length} customers, ${tks.length} tickets.`);
   console.log("Login: admin@raybon.local / admin123  (or aarti@raybon.local / raybon123)");
   void admin;
 }
 
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
+
+async function seedWorkspace() {
+  const { fromLocal, localParts, startOfLocalWeek } = await import("../src/lib/tz");
+  const us = await db.select().from(users);
+  const by = (e: string) => us.find((u) => u.email.startsWith(e))!;
+  const aarti = by("aarti"), gaurang = by("gaurang"), rakesh = by("rakesh"), admin = by("admin");
+  const cs = await db.select().from(customers);
+  const wk = startOfLocalWeek(Date.now());
+  const at = (dayOffset: number, h: number, m = 0) => { const p = localParts(+wk + dayOffset * 864e5); return fromLocal(p.y, p.m, p.d, h, m); };
+  const evs = [
+    { title: "Weekly sales review", startAt: at(0, 10), endAt: at(0, 11), ownerId: aarti.id, location: "Vadodara office", att: [aarti.id, gaurang.id, admin.id] },
+    { title: "Site visit — Neogen Dahej MEE", startAt: at(1, 11), endAt: at(1, 14), ownerId: rakesh.id, location: "Neogen Chemicals, Dahej", customer: "Neogen Chemicals Ltd.", att: [rakesh.id] },
+    { title: "Techno-commercial meeting — DCM Shriram", startAt: at(2, 15), endAt: at(2, 16, 30), ownerId: aarti.id, location: "Video call", customer: "DCM Shriram Industries Ltd.", att: [aarti.id, gaurang.id] },
+    { title: "Service team stand-up", startAt: at(3, 9, 30), endAt: at(3, 10), ownerId: admin.id, location: "Office", att: [admin.id, rakesh.id, aarti.id] },
+    { title: "Apcotex 500 KLD — PO negotiation", startAt: at(4, 12), endAt: at(4, 13), ownerId: aarti.id, customer: "Apcotex Industries Ltd.", att: [aarti.id] },
+    { title: "Pollution control board audit prep", startAt: at(9, 0), endAt: at(10, 0), allDay: true, ownerId: admin.id, att: [admin.id, aarti.id] },
+  ];
+  for (const e of evs) {
+    const [row] = await db.insert(events).values({ title: e.title, startAt: e.startAt, endAt: e.endAt, allDay: !!e.allDay, ownerId: e.ownerId, location: e.location ?? null, customerId: cs.find((c) => c.name === e.customer)?.id ?? null, uid: `seed-${Math.random().toString(36).slice(2)}@raybon-erp` }).returning();
+    await db.insert(eventAttendees).values(e.att.map((userId) => ({ eventId: row!.id, userId })));
+  }
+  const [general, sales, service] = await db.insert(channels).values([
+    { name: "general", description: "Company-wide announcements and chat" },
+    { name: "sales", description: "Deals, quotations and leads" },
+    { name: "service", description: "Site visits, breakdowns and field updates" },
+  ]).returning();
+  const H = 3600e3, now = Date.now();
+  await db.insert(chatMessages).values([
+    { channelId: general!.id, authorId: admin.id, body: "Welcome to Raybon ERP 👋 Use #sales for deals and #service for site updates.", createdAt: new Date(now - 26 * H) },
+    { channelId: sales!.id, authorId: aarti.id, body: "DCM Shriram asked for a revised offer with ATFD included. @Gaurang Doshi can you check the MEE sizing?", createdAt: new Date(now - 5 * H) },
+    { channelId: sales!.id, authorId: gaurang.id, body: "On it — will share by tomorrow noon.", createdAt: new Date(now - 4.5 * H) },
+    { channelId: service!.id, authorId: rakesh.id, body: "At Neogen Dahej now. TKT-0002 — condenser vacuum was low due to a leaking gasket, replaced. Monitoring for 2 hours.", createdAt: new Date(now - 2 * H) },
+  ]);
+  await db.insert(docFolders).values([{ name: "Brochures" }, { name: "Water analysis reports" }, { name: "Drawings & P&IDs" }, { name: "Manuals & SOPs" }]);
+}

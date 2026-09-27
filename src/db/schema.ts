@@ -54,6 +54,21 @@ export const contacts = sqliteTable("contacts", {
   createdAt: createdAt(),
 });
 
+// Customer plants (sites). Zone = the support team that covers the plant.
+export const plants = sqliteTable("plants", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  plantNo: text("plant_no").notNull().unique(),
+  name: text("name").notNull(),
+  customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+  teamId: integer("team_id").references(() => teams.id, { onDelete: "set null" }),
+  city: text("city"),
+  state: text("state"),
+  capacity: text("capacity"),
+  technology: text("technology"),
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: createdAt(),
+});
+
 export const STAGES = ["new", "in_progress", "waiting", "resolved", "closed"] as const;
 export type Stage = (typeof STAGES)[number];
 
@@ -74,6 +89,19 @@ export const tickets = sqliteTable(
     contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
     dueAt: integer("due_at", { mode: "timestamp" }),
+    plantId: integer("plant_id").references(() => plants.id, { onDelete: "set null" }),
+    complainantName: text("complainant_name"),
+    complainantPhone: text("complainant_phone"),
+    complainantEmail: text("complainant_email"),
+    source: text("source", { enum: ["internal", "email", "portal"] }).notNull().default("internal"),
+    reportedAt: integer("reported_at", { mode: "timestamp" }), // complaint date picked on the form / calendar
+    tatMinutes: integer("tat_minutes"), // turn-around time, stamped when closed
+    closedById: integer("closed_by_id").references(() => users.id, { onDelete: "set null" }),
+    csatToken: text("csat_token"),
+    csatScore: integer("csat_score"),
+    csatComment: text("csat_comment"),
+    signatureKey: text("signature_key"),
+    signedBy: text("signed_by"),
     firstResponseAt: integer("first_response_at", { mode: "timestamp" }),
     resolvedAt: integer("resolved_at", { mode: "timestamp" }),
     createdAt: createdAt(),
@@ -81,6 +109,24 @@ export const tickets = sqliteTable(
   },
   (t) => [index("tickets_team_stage").on(t.teamId, t.stage), index("tickets_assignee").on(t.assigneeId)],
 );
+
+export const ticketWatchers = sqliteTable(
+  "ticket_watchers",
+  {
+    ticketId: integer("ticket_id").notNull().references(() => tickets.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    name: text("name"),
+  },
+  (t) => [primaryKey({ columns: [t.ticketId, t.email] })],
+);
+
+export const cannedResponses = sqliteTable("canned_responses", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+});
 
 export const messages = sqliteTable(
   "messages",
@@ -136,9 +182,21 @@ export const ticketsRelations = relations(tickets, ({ one, many }) => ({
   createdBy: one(users, { fields: [tickets.createdById], references: [users.id], relationName: "creator" }),
   customer: one(customers, { fields: [tickets.customerId], references: [customers.id] }),
   contact: one(contacts, { fields: [tickets.contactId], references: [contacts.id] }),
+  plant: one(plants, { fields: [tickets.plantId], references: [plants.id] }),
+  closedBy: one(users, { fields: [tickets.closedById], references: [users.id], relationName: "closer" }),
+  watchers: many(ticketWatchers),
   messages: many(messages),
   attachments: many(attachments),
 }));
+export const plantsRelations = relations(plants, ({ one, many }) => ({
+  customer: one(customers, { fields: [plants.customerId], references: [customers.id] }),
+  team: one(teams, { fields: [plants.teamId], references: [teams.id] }),
+  tickets: many(tickets),
+}));
+export const ticketWatchersRelations = relations(ticketWatchers, ({ one }) => ({
+  ticket: one(tickets, { fields: [ticketWatchers.ticketId], references: [tickets.id] }),
+}));
+
 export const messagesRelations = relations(messages, ({ one, many }) => ({
   ticket: one(tickets, { fields: [messages.ticketId], references: [tickets.id] }),
   author: one(users, { fields: [messages.authorId], references: [users.id] }),
@@ -149,3 +207,4 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
   message: one(messages, { fields: [attachments.messageId], references: [messages.id] }),
 }));
 export * from "./crm";
+export * from "./p4";

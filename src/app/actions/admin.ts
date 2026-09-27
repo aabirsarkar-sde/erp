@@ -77,3 +77,28 @@ export async function setAutoTriage(on: boolean) {
   await db.insert(settings).values({ key: "ai_auto_triage", value: on ? "on" : "off" }).onConflictDoUpdate({ target: settings.key, set: { value: on ? "on" : "off" } });
   done();
 }
+
+export async function setHoEmails(fd: FormData) {
+  await requireAdmin();
+  const { settings } = await import("@/db");
+  const v = String(fd.get("ho") ?? "").split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x)).join(", ");
+  await db.insert(settings).values({ key: "ho_emails", value: v }).onConflictDoUpdate({ target: settings.key, set: { value: v } });
+  done();
+}
+
+export async function saveCanned(id: number | null, fd: FormData) {
+  await requireAdmin();
+  const { cannedResponses } = await import("@/db");
+  const title = String(fd.get("title") ?? "").trim(), body = String(fd.get("body") ?? "").trim();
+  if (!title || !body) return;
+  if (id) await db.update(cannedResponses).set({ title, body }).where(eq(cannedResponses.id, id));
+  else await db.insert(cannedResponses).values({ title, body });
+  done();
+}
+
+export async function deleteCanned(id: number) {
+  await requireAdmin();
+  const { cannedResponses } = await import("@/db");
+  await db.delete(cannedResponses).where(eq(cannedResponses.id, id));
+  done();
+}

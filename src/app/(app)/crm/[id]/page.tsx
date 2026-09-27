@@ -96,6 +96,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           <form action={reopenLead.bind(null, l.id)}><button className="btn-secondary">Reopen</button></form>
         )}
         <form action={createQuotation}><input type="hidden" name="leadId" value={l.id} /><button className="btn-secondary"><IconPlus className="size-4" />Quotation</button></form>
+        <Link href={`/calendar/new?lead=${l.id}${l.customerId ? `&customer=${l.customerId}` : ""}&title=${encodeURIComponent(`Meeting — ${l.customer?.name ?? l.title}`)}`} className="btn-secondary"><IconPlus className="size-4" />Meeting</Link>
         <span className="ml-auto" />
       </div>
 

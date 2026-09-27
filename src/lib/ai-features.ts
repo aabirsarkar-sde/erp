@@ -49,9 +49,14 @@ Return JSON:
     mock: () => {
       const s = `${input.subject} ${input.description ?? ""}`.toLowerCase();
       const urgent = /trip|stopp|breakdown|shut|not working|leak/.test(s);
-      const cat = /spare|membrane|module|blade/.test(s) ? "Spare parts" : urgent ? "Plant breakdown" : /tds|recovery|performance|scaling|pressure/.test(s) ? "Performance issue" : "Query";
+      const cat = /trip|breaker|vfd|motor|panel|mcc|power/.test(s) ? "Electrical"
+        : /transmitter|plc|hmi|analy[sz]er|sensor|meter|instrument/.test(s) ? "Instrumentation"
+        : /membrane|permeate|recovery|dp\b|rejection/.test(s) ? "Membrane"
+        : /tds|turbidity|feed|cod|hardness|silica/.test(s) ? "Feed water quality"
+        : /operator|staff|shift|manpower|absent/.test(s) ? "Manpower"
+        : /pump|bearing|valve|vacuum|leak|blade|seal|mechanical/.test(s) ? "Mechanical" : "Other";
       const team = ts.find((t) => input.city && t.location?.toLowerCase().includes(input.city.toLowerCase())) ?? null;
-      return { category: cat, priority: urgent ? 3 : cat === "Performance issue" ? 2 : 1, teamId: team?.id ?? null, tags: ["RO"], summary: input.subject.slice(0, 80), reason: urgent ? "Equipment is down, which can stop the plant." : "Performance deviation needs attention." };
+      return { category: cat, priority: urgent ? 3 : cat === "Membrane" || cat === "Feed water quality" ? 2 : 1, teamId: team?.id ?? null, tags: ["RO"], summary: input.subject.slice(0, 80), reason: urgent ? "Equipment is down, which can stop the plant." : "Needs attention but the plant is running." };
     },
   });
   if (!CATEGORIES.includes(r.category)) r.category = "Other";

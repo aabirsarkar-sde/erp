@@ -66,3 +66,13 @@ export function amountInWords(n: number) {
   if (r) parts.push(three(r));
   return `Rupees ${parts.join(" ")}${paise ? ` and ${two(paise)} Paise` : ""} Only`;
 }
+
+/** Turn-around time, e.g. 1d 4h / 3h 20m / 45m */
+export function fmtTat(min: number | null | undefined) {
+  if (min == null) return "—";
+  const m = Math.max(0, Math.round(min));
+  const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+  if (d) return `${d}d ${h}h`;
+  if (h) return `${h}h ${mm}m`;
+  return `${mm}m`;
+}

@@ -46,7 +46,7 @@ export function TicketProps({ t, teams, users, customers }: { t: T; teams: Opt[]
           {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
       </Field>
-      <Field label="Category">
+      <Field label="Type of complaint">
         <select name="category" defaultValue={t.category ?? ""} onChange={auto} className="input">
           <option value="">—</option>
           {CATEGORIES.map((c) => <option key={c}>{c}</option>)}

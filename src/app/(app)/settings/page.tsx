@@ -9,7 +9,9 @@ import { Field } from "@/components/ui";
 import { PRIORITIES } from "@/lib/constants";
 import { mailEnabled } from "@/lib/mail";
 import { aiConfig, aiEnabled } from "@/lib/ai";
-import { setAutoTriage } from "@/app/actions/admin";
+import { setAutoTriage, setHoEmails, saveCanned, deleteCanned } from "@/app/actions/admin";
+import { getHoEmails } from "@/lib/notify";
+import { cannedResponses } from "@/db";
 import { db as _db, aiUsage, settings as settingsT } from "@/db";
 import { eq, gte, sql } from "drizzle-orm";
 import { PageHeader, Avatar } from "@/components/ui";
@@ -25,6 +27,7 @@ export default async function SettingsPage() {
     _db.query.settings.findFirst({ where: eq(settingsT.key, "ai_auto_triage") }),
   ]);
   const autoTriage = triageRow?.value !== "off";
+  const [ho, canned] = await Promise.all([getHoEmails(), _db.select().from(cannedResponses)]);
   const [co, sla, us, ts] = await Promise.all([
     getCompany(),
     getSla(),
@@ -34,7 +37,7 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <PageHeader title="Settings" subtitle="Manage support teams and who can sign in." />
+      <PageHeader title="Settings" subtitle="Manage support teams and who can sign in." actions={<a href="/settings/import" className="btn-secondary">Import from Odoo</a>} />
 
       <section className="card">
         <div className="border-b border-slate-100 px-4 py-3">
@@ -65,6 +68,38 @@ export default async function SettingsPage() {
           ))}
         </ul>
         <NewUserForm />
+      </section>
+
+      <section className="card p-4 text-sm">
+        <h2 className="font-semibold">Rochem HO — copied on every complaint</h2>
+        <p className="mb-2 text-xs text-slate-500">These addresses automatically follow every ticket: they get the new-complaint email, every reply in the chain, and the closure mail with TAT.</p>
+        <form action={setHoEmails} className="flex gap-2">
+          <input name="ho" defaultValue={ho.join(", ")} placeholder="service.head@rochem.com, ho@rochem.com" className="input" />
+          <button className="btn-primary">Save</button>
+        </form>
+      </section>
+
+      <section className="card">
+        <div className="border-b border-slate-100 px-4 py-3">
+          <h2 className="font-semibold">Canned replies</h2>
+          <p className="text-xs text-slate-500">Ready-made answers engineers can insert into a reply. Use {"{name}"} and {"{plant}"} — they are filled in automatically.</p>
+        </div>
+        <ul className="divide-y divide-slate-100">
+          {canned.map((c) => (
+            <li key={c.id} className="p-4">
+              <form action={saveCanned.bind(null, c.id)} className="space-y-2">
+                <input name="title" defaultValue={c.title} className="input py-1.5 font-medium" />
+                <textarea name="body" defaultValue={c.body} rows={3} className="input text-sm" />
+                <div className="flex gap-2"><button className="btn-secondary py-1 text-xs">Save</button><button formAction={deleteCanned.bind(null, c.id)} className="btn-ghost py-1 text-xs text-red-600">Delete</button></div>
+              </form>
+            </li>
+          ))}
+        </ul>
+        <form action={saveCanned.bind(null, null)} className="space-y-2 border-t border-slate-100 bg-brand-50/30 p-4">
+          <input name="title" required placeholder="New reply title" className="input py-1.5" />
+          <textarea name="body" required rows={3} placeholder="Dear {name}, …" className="input text-sm" />
+          <button className="btn-primary py-1.5 text-xs">Add canned reply</button>
+        </form>
       </section>
 
       <section className="card">

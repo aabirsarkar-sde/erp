@@ -2,7 +2,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition, useState, useEffect } from "react";
 import { IconSearch, IconList, IconBoard } from "./icons";
-import { STAGE_META, PRIORITIES } from "@/lib/constants";
+import { STAGE_META, PRIORITIES, COMPLAINT_TYPES } from "@/lib/constants";
 
 type Opt = { id: number; name: string; location?: string | null };
 
@@ -39,7 +39,7 @@ export function TicketFilters({ teams, users }: { teams: Opt[]; users: Opt[] }) 
       <div className="flex gap-2">
         <div className="relative flex-1">
           <IconSearch className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search subject, customer, site, TKT-0012…" className="input pl-9" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search plant no., customer, complainant, TKT-0012…" className="input pl-9" />
         </div>
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5">
           {[["list", IconList], ["board", IconBoard]].map(([v, I]) => {
@@ -66,6 +66,10 @@ export function TicketFilters({ teams, users }: { teams: Opt[]; users: Opt[] }) 
         <select className={sel} value={sp.get("team") ?? ""} onChange={(e) => set("team", e.target.value)}>
           <option value="">All teams</option>
           {teams.map((t) => <option key={t.id} value={t.id}>{t.location ?? t.name}</option>)}
+        </select>
+        <select className={sel} value={sp.get("type") ?? ""} onChange={(e) => set("type", e.target.value)}>
+          <option value="">All types</option>
+          {COMPLAINT_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
         <select className={sel} value={sp.get("stage") ?? (view === "board" ? "all" : "open")} onChange={(e) => set("stage", e.target.value === (view === "board" ? "all" : "open") ? "" : e.target.value)}>
           <option value="open">Open</option>

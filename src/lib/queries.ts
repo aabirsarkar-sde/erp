@@ -1,7 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, isNull, like, lt, or, sql, gte, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { db, tickets, customers, users, teams, STAGES, type Stage } from "@/db";
+import { db, tickets, customers, users, teams, plants, STAGES, type Stage } from "@/db";
 import { OPEN_STAGES } from "./constants";
 
 export type TicketFilters = {
@@ -11,6 +11,11 @@ export type TicketFilters = {
   priority?: string;
   assignee?: string; // "me" | "unassigned" | id
   preset?: string; // "unattended" | "high" | "overdue"
+  plant?: string;
+  type?: string;
+  city?: string;
+  from?: string; // YYYY-MM-DD (reported/created)
+  to?: string;
   sort?: string; // "new" | "priority" | "updated"
 };
 
@@ -22,6 +27,11 @@ export function ticketWhere(f: TicketFilters, meId: number) {
   if (stage === "open") c.push(openCond);
   else if ((STAGES as readonly string[]).includes(stage)) c.push(eq(tickets.stage, stage as Stage));
   if (f.team) c.push(eq(tickets.teamId, Number(f.team)));
+  if (f.plant) c.push(eq(tickets.plantId, Number(f.plant)));
+  if (f.type) c.push(eq(tickets.category, f.type));
+  if (f.city) c.push(or(eq(plants.city, f.city), eq(plants.state, f.city), eq(customers.city, f.city))!);
+  if (f.from) c.push(gte(sql`coalesce(${tickets.reportedAt}, ${tickets.createdAt})`, Math.floor(Date.parse(f.from + "T00:00:00+05:30") / 1000)));
+  if (f.to) c.push(lt(sql`coalesce(${tickets.reportedAt}, ${tickets.createdAt})`, Math.floor(Date.parse(f.to + "T00:00:00+05:30") / 1000) + 86400));
   if (f.priority) c.push(eq(tickets.priority, Number(f.priority)));
   if (f.assignee === "me") c.push(eq(tickets.assigneeId, meId));
   else if (f.assignee === "unassigned") c.push(isNull(tickets.assigneeId));
@@ -33,7 +43,7 @@ export function ticketWhere(f: TicketFilters, meId: number) {
     const q = f.q.trim();
     const num = Number(q.replace(/^tkt-?/i, ""));
     const pat = `%${q}%`;
-    const ors = [like(tickets.subject, pat), like(customers.name, pat), like(tickets.site, pat), like(tickets.tags, pat)];
+    const ors = [like(tickets.subject, pat), like(customers.name, pat), like(tickets.site, pat), like(tickets.tags, pat), like(plants.plantNo, pat), like(plants.name, pat), like(tickets.complainantName, pat)];
     if (Number.isFinite(num) && num > 0) ors.push(eq(tickets.id, num));
     c.push(or(...ors)!);
   }
@@ -63,8 +73,18 @@ export async function listTickets(f: TicketFilters, meId: number, limit = 200) {
       customerName: customers.name,
       teamName: teams.location,
       assigneeName: assignee.name,
+      plantNo: plants.plantNo,
+      plantName: plants.name,
+      city: plants.city,
+      state: plants.state,
+      reportedAt: tickets.reportedAt,
+      resolvedAt: tickets.resolvedAt,
+      tatMinutes: tickets.tatMinutes,
+      complainantName: tickets.complainantName,
+      csatScore: tickets.csatScore,
     })
     .from(tickets)
+    .leftJoin(plants, eq(plants.id, tickets.plantId))
     .leftJoin(customers, eq(customers.id, tickets.customerId))
     .leftJoin(teams, eq(teams.id, tickets.teamId))
     .leftJoin(assignee, eq(assignee.id, tickets.assigneeId))

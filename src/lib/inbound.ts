@@ -1,9 +1,9 @@
 import "server-only";
 import { and, eq, like, sql } from "drizzle-orm";
-import { db, tickets, messages, contacts, customers, teams, attachments } from "@/db";
+import { db, tickets, messages, contacts, customers, teams, attachments, users, ticketWatchers } from "@/db";
 import { saveFile } from "./storage";
 import { getSla } from "./sla";
-import { ackNewTicket, notifyInbound } from "./notify";
+import { ackNewTicket, notifyInbound, autoWatchers, notifyNewTicket } from "./notify";
 import { aiEnabled } from "./ai";
 import { triageTicket } from "./ai-features";
 import { settings } from "@/db";
@@ -47,12 +47,13 @@ export async function handleInbound(mail: InboundEmail) {
   if (ref) {
     const t = await db.query.tickets.findFirst({ where: eq(tickets.id, Number(ref[1])) });
     if (t) {
-      const [m] = await db.insert(messages).values({ ticketId: t.id, kind: "inbound", body, fromEmail: email, fromName: name }).returning();
+      const staff = await db.query.users.findFirst({ where: eq(users.email, email) });
+      const [m] = await db.insert(messages).values({ ticketId: t.id, kind: "inbound", body, fromEmail: email, fromName: staff?.name ?? name, authorId: staff?.id ?? null }).returning();
       await saveAttachments(mail.attachments, t.id, m!.id);
       const reopen = t.stage === "waiting" || t.stage === "resolved" || t.stage === "closed";
       await db.update(tickets).set({ updatedAt: new Date(), ...(reopen ? { stage: "in_progress" as const, resolvedAt: null } : {}) }).where(eq(tickets.id, t.id));
       if (reopen) await db.insert(messages).values({ ticketId: t.id, kind: "event", body: "Reopened by customer reply" });
-      await notifyInbound(t.id, name || email);
+      await notifyInbound(t.id, staff?.name ?? (name || email), email, body);
       return { ticketId: t.id, created: false };
     }
   }
@@ -85,8 +86,12 @@ export async function handleInbound(mail: InboundEmail) {
     .returning();
   const [m] = await db.insert(messages).values({ ticketId: t!.id, kind: "event", body: `Created from email by ${name ? `${name} <${email}>` : email}` }).returning();
   await saveAttachments(mail.attachments, t!.id, m!.id);
+  await db.update(tickets).set({ source: "email", complainantName: name || email, complainantEmail: email, reportedAt: new Date() }).where(eq(tickets.id, t!.id));
   await autoTriage(t!.id, subject, body, customerId);
+  await db.insert(ticketWatchers).values({ ticketId: t!.id, email, name }).onConflictDoNothing();
+  await autoWatchers(t!.id);
   await ackNewTicket(t!.id, email, subject);
+  await notifyNewTicket(t!.id);
   return { ticketId: t!.id, created: true };
 }
 

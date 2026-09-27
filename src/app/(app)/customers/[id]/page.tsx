@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { db, customers, leads, quotations } from "@/db";
+import { db, customers, leads, quotations, documents, docFolders } from "@/db";
+import { DocUpload } from "@/components/doc-upload";
+import { lookups } from "@/lib/queries";
+import { fmtSize } from "@/lib/format";
 import { desc } from "drizzle-orm";
 import { inr as inrFmt } from "@/lib/format";
 import { quoteRef } from "@/lib/crm";
@@ -25,6 +28,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     db.query.leads.findMany({ where: eq(leads.customerId, id), orderBy: desc(leads.updatedAt), with: { stage: true } }),
     db.query.quotations.findMany({ where: eq(quotations.customerId, id), orderBy: desc(quotations.date) }),
   ]);
+  const [docs, folders, lk] = await Promise.all([db.query.documents.findMany({ where: eq(documents.customerId, id), orderBy: desc(documents.createdAt) }), db.select().from(docFolders), lookups()]);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -92,6 +96,21 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
               </ul>
             </section>
           )}
+          <section className="card">
+            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Documents ({docs.length})</h2>
+            {docs.length > 0 && (
+              <ul className="divide-y divide-slate-100">
+                {docs.map((d) => (
+                  <li key={d.id} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                    <a href={`/api/docs/${d.id}?view`} target="_blank" className="min-w-0 flex-1 truncate hover:text-brand-700">{d.name}</a>
+                    <span className="text-xs text-slate-400">{fmtSize(d.size)}</span>
+                    <a href={`/api/docs/${d.id}`} className="text-xs text-brand-700">Download</a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="border-t border-slate-100 p-3"><DocUpload folders={folders} customers={lk.customers} customerId={c.id} /></div>
+          </section>
           <details className="card group">
             <summary className="cursor-pointer list-none px-4 py-3 text-sm font-semibold">Edit company details <span className="text-slate-400 group-open:hidden">+</span></summary>
             <form action={updateCustomer.bind(null, c.id)} className="space-y-4 border-t border-slate-100 p-4">
