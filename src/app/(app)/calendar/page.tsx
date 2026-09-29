@@ -4,7 +4,7 @@ import { db, events, eventAttendees, activities, tickets, plants } from "@/db";
 import { requireUser } from "@/lib/auth";
 import { lookups } from "@/lib/queries";
 import { regenerateCalendarToken } from "@/app/actions/calendar";
-import { getOrCreateCalendarToken } from "@/lib/calendar";
+import { getOrCreateCalendarToken, calendarScope } from "@/lib/calendar";
 import { PageHeader, LinkButton } from "@/components/ui";
 import { ParamSelect } from "@/components/url-filters";
 import { CopyField } from "@/components/copy-field";
@@ -34,19 +34,19 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const from = view === "week" ? startOfLocalWeek(anchor) : startOfLocalWeek(startOfLocalMonth(anchor));
   const days = view === "week" ? 7 : 42;
   const to = new Date(+from + days * DAY_MS);
-  const who = sp.who === "all" ? null : sp.who ? Number(sp.who) : me.id;
+  const scope = calendarScope(sp.who, me.id);
 
   const lk = await lookups();
-  const mine = who ? db.select({ id: eventAttendees.eventId }).from(eventAttendees).where(eq(eventAttendees.userId, who)) : null;
+  const mine = scope.events ? db.select({ id: eventAttendees.eventId }).from(eventAttendees).where(eq(eventAttendees.userId, scope.events.userId)) : null;
   const show = sp.show ?? "all";
   const tAt = sql<number>`coalesce(${tickets.reportedAt}, ${tickets.createdAt})`;
   const [evs, acts, token, tks] = await Promise.all([
     db.select().from(events).where(and(lt(events.startAt, to), gte(events.endAt, from), mine ? inArray(events.id, mine) : undefined)),
-    db.select().from(activities).where(and(isNull(activities.doneAt), gte(activities.dueAt, from), lt(activities.dueAt, to), who ? eq(activities.userId, who) : undefined)),
+    db.select().from(activities).where(and(isNull(activities.doneAt), gte(activities.dueAt, from), lt(activities.dueAt, to), scope.activities ? eq(activities.userId, scope.activities.userId) : undefined)),
     getOrCreateCalendarToken(me.id),
     db.select({ id: tickets.id, category: tickets.category, stage: tickets.stage, tat: tickets.tatMinutes, at: tAt, plantNo: plants.plantNo, subject: tickets.subject })
       .from(tickets).leftJoin(plants, eq(plants.id, tickets.plantId))
-      .where(and(gte(tAt, Math.floor(+from / 1000)), lt(tAt, Math.floor(+to / 1000)), who && sp.who ? eq(tickets.assigneeId, who) : undefined)),
+      .where(and(gte(tAt, Math.floor(+from / 1000)), lt(tAt, Math.floor(+to / 1000)), scope.tickets ? eq(tickets.assigneeId, scope.tickets.assigneeId) : undefined)),
   ]);
   const showEvents = show !== "tickets", showTickets = show !== "events";
   type Tk = (typeof tks)[number];
