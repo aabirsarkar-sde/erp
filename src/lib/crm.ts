@@ -28,3 +28,14 @@ export const tagList = (t: string | null) => (t ? t.split(",").map((x) => x.trim
 
 // client-safe copy (avoid importing the db schema into browser bundles)
 export const ACTIVITY_TYPE_LIST = ["call", "meeting", "visit", "email", "todo"] as const;
+
+// Build the props for an ActivityItem row. The activity's user name is always
+// passed through so the "By" name renders for every filter (me, a specific
+// user, or Everyone).
+export function activityItemProps(a: {
+  user?: { name: string | null } | null;
+  lead?: { id: number; title: string | null } | null;
+  customer?: { name: string | null } | null;
+}) {
+  return { userName: a.user?.name ?? null, leadTitle: a.lead?.title ?? null, customerName: a.customer?.name ?? null };
+}

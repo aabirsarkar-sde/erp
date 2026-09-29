@@ -9,7 +9,7 @@ import { ActivityForm } from "@/components/activity-form";
 import { AiQuickLog } from "@/components/ai-quick-log";
 import { aiEnabled } from "@/lib/ai";
 import { ParamSelect } from "@/components/url-filters";
-import { ACTIVITY_META } from "@/lib/crm";
+import { ACTIVITY_META, activityItemProps } from "@/lib/crm";
 import { fmtDateTime } from "@/lib/format";
 
 export const metadata = { title: "Activities" };
@@ -101,7 +101,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
               <section key={label} className="card">
                 <h2 className={`border-b border-slate-100 px-4 py-2.5 text-sm font-semibold ${label === "Overdue" ? "text-red-600" : ""}`}>{label} ({list.length})</h2>
                 <ul className="divide-y divide-slate-100">
-                  {list.map((a) => <ActivityItem key={a.id} showLead a={{ ...a, userName: who ? null : a.user?.name, leadTitle: a.lead?.title, customerName: a.customer?.name }} />)}
+                  {list.map((a) => <ActivityItem key={a.id} showLead a={{ ...a, ...activityItemProps(a) }} />)}
                 </ul>
               </section>
             ) : null,
