@@ -11,7 +11,7 @@ export default async function AskPage() {
   if (!aiEnabled()) return <div className="mx-auto max-w-xl pt-10"><Empty title="AI isn't set up yet" hint="Add a free Gemini API key as AI_API_KEY in .env (see README), then restart." /></div>;
   return (
     <div className="mx-auto max-w-3xl">
-      <Suspense><AskChat name={me.name} /></Suspense>
+      <Suspense><AskChat name={me.name} crm={me.crmAccess !== "none"} hd={me.hdAccess !== "none"} /></Suspense>
     </div>
   );
 }

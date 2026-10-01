@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const me = await getCurrentUser();
   if (!me) return new Response("Unauthorized", { status: 401 });
   const f = Object.fromEntries(new URL(req.url).searchParams);
-  const rows = await listTickets({ ...f, stage: f.stage ?? "all" }, me.id, 20000);
+  const rows = await listTickets({ ...f, stage: f.stage ?? "all" }, me, 20000);
   const wb = newWorkbook();
   addSheet(wb, "Tickets", [
     { header: "Ticket", key: "ref", width: 11 }, { header: "Reported", key: "reported", width: 17 }, { header: "Plant no.", key: "plantNo", width: 10 },

@@ -20,7 +20,7 @@ export function ActivityItem({ a, showLead }: { a: A; showLead?: boolean }) {
       <div className="flex items-start gap-3">
         <span className="mt-0.5 text-lg leading-none" title={m.label}>{m.emoji}</span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-medium">{a.summary}</div>
+          <Link href={`/activities/${a.id}`} className="text-sm font-medium hover:text-brand-700 hover:underline">{a.summary}</Link>
           <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-500">
             <span className={`font-medium ${dueTone(a.dueAt)}`}>{fmtDate(a.dueAt)}</span>
             {a.userName && <span>· {a.userName}</span>}
@@ -28,13 +28,16 @@ export function ActivityItem({ a, showLead }: { a: A; showLead?: boolean }) {
             {showLead && !a.leadId && a.customerName && <span>· {a.customerName}</span>}
           </div>
           {a.note && <p className="mt-1 text-xs text-slate-600">{a.note}</p>}
-          <details className="group mt-2">
-            <summary className="inline-flex cursor-pointer list-none items-center rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">✓ Mark done</summary>
+          <div className="mt-2 flex flex-wrap items-start gap-2">
+            <Link href={`/activities/${a.id}`} className="mr-2 inline-flex items-center rounded-md bg-brand-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-brand-700">{a.type === "visit" ? "Write visit report" : a.type === "call" ? "Write call report" : "Complete"}</Link>
+          <details className="group">
+            <summary className="inline-flex cursor-pointer list-none items-center rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50">✓ Quick done</summary>
             <form action={completeActivity.bind(null, a.id)} className="mt-2 flex flex-col gap-2 sm:flex-row">
               <input name="outcome" className="input py-1.5 text-sm" placeholder="Outcome (optional) — what did they say?" />
               <button className="btn-primary py-1.5">Done</button>
             </form>
           </details>
+          </div>
         </div>
         <form action={deleteActivity.bind(null, a.id)}><button className="text-xs text-slate-300 hover:text-red-600" title="Delete">✕</button></form>
       </div>

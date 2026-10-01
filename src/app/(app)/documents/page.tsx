@@ -3,6 +3,7 @@ import { and, asc, desc, eq, isNull, like, or, sql, type SQL } from "drizzle-orm
 import { alias } from "drizzle-orm/sqlite-core";
 import { db, documents, docFolders, customers, users } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { documentScope } from "@/lib/access";
 import { lookups } from "@/lib/queries";
 import { createFolder, deleteDocument, updateDocument } from "@/app/actions/documents";
 import { PageHeader, Empty } from "@/components/ui";
@@ -21,6 +22,8 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
   const up = alias(users, "up");
   const folderSel = sp.folder === "none" ? "none" : sp.folder ? Number(sp.folder) : null;
   const c: SQL[] = [];
+  const ds = documentScope(me);
+  if (ds) c.push(ds);
   if (folderSel === "none") c.push(isNull(documents.folderId));
   else if (folderSel) c.push(eq(documents.folderId, folderSel));
   if (sp.q) { const p = `%${sp.q}%`; c.push(or(like(documents.name, p), like(documents.description, p), like(customers.name, p))!); }

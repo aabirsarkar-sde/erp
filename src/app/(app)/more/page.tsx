@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { NAV } from "@/lib/nav-config";
+import { visibleNav } from "@/lib/nav-config";
 
 export default async function MorePage() {
   const me = await requireUser();
   return (
     <div className="mx-auto max-w-md space-y-5">
-      {NAV.filter((g) => !g.admin || me.role === "admin").map((g, i) => (
+      {visibleNav({ isAdmin: me.role === "admin", crm: me.crmAccess !== "none", hd: me.hdAccess !== "none" }).map((g, i) => (
         <section key={i}>
           {g.title && <h2 className="mb-1.5 px-1 text-xs font-semibold uppercase tracking-wider text-slate-400">{g.title}</h2>}
           <div className="card divide-y divide-slate-100">

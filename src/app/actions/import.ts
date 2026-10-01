@@ -1,4 +1,5 @@
 "use server";
+import { editionHasCrm, editionHasHd } from "@/lib/edition";
 import { revalidatePath } from "next/cache";
 import { and, eq, like, sql } from "drizzle-orm";
 import { db, customers, contacts, leads, crmStages, users, tickets, teams, messages, plants } from "@/db";
@@ -51,6 +52,7 @@ async function userMatcher() {
 export async function importRows(kind: ImportKind, rows: Row[]): Promise<ImportResult> {
   await requireAdmin();
   const r: ImportResult = { created: 0, updated: 0, skipped: 0, errors: [] };
+  if ((kind === "leads" && !editionHasCrm) || ((kind === "tickets" || kind === "plants") && !editionHasHd)) return { ...r, errors: ["This import belongs to the other app."] };
   if (rows.length > 5000) return { ...r, errors: ["Send at most 5000 rows per batch."] };
   const cc = await customerCache();
 

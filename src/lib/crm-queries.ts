@@ -1,17 +1,24 @@
 import "server-only";
-import { and, asc, desc, eq, gte, isNull, like, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, like, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { db, leads, crmStages, customers, users, activities } from "@/db";
+import { db, leads, crmStages, customers, users, activities, leadMembers } from "@/db";
+import { leadScope } from "./access";
+import type { CurrentUser } from "./auth";
 
-export type LeadFilters = { q?: string; owner?: string; status?: string; tag?: string };
+export type LeadFilters = { q?: string; owner?: string; status?: string; tag?: string; kind?: string; source?: string };
 
-export async function listLeads(f: LeadFilters, meId: number) {
+export async function listLeads(f: LeadFilters, me: CurrentUser) {
+  const meId = me.id;
   const owner = alias(users, "owner");
   const c: SQL[] = [];
+  const scope = leadScope(me);
+  if (scope) c.push(scope);
+  if (f.kind) c.push(eq(leads.kind, f.kind as "lead" | "opportunity"));
   const status = f.status || "open";
   if (status !== "all") c.push(eq(leads.status, status as "open" | "won" | "lost"));
-  if (f.owner === "me" || f.owner === undefined) c.push(eq(leads.ownerId, meId));
-  else if (f.owner && f.owner !== "all") c.push(eq(leads.ownerId, Number(f.owner)));
+  if (f.owner === "me" || f.owner === undefined) c.push(or(eq(leads.ownerId, meId), inArray(leads.id, db.select({ id: leadMembers.leadId }).from(leadMembers).where(eq(leadMembers.userId, meId))))!);
+  else if (f.owner && f.owner !== "all" && Number.isFinite(Number(f.owner))) c.push(eq(leads.ownerId, Number(f.owner)));
+  if (f.source) c.push(eq(leads.source, f.source));
   if (f.tag) c.push(like(leads.tags, `%${f.tag}%`));
   if (f.q?.trim()) {
     const p = `%${f.q.trim()}%`;
@@ -33,6 +40,11 @@ export async function listLeads(f: LeadFilters, meId: number) {
       probability: leads.probability,
       priority: leads.priority,
       tags: leads.tags,
+      kind: leads.kind,
+      product: leads.product,
+      proposalStatus: leads.proposalStatus,
+      source: leads.source,
+      createdAt: leads.createdAt,
       sortOrder: leads.sortOrder,
       expectedCloseAt: leads.expectedCloseAt,
       customerId: leads.customerId,
@@ -54,13 +66,14 @@ export type LeadRow = Awaited<ReturnType<typeof listLeads>>[number];
 
 export const getStages = () => db.select().from(crmStages).orderBy(asc(crmStages.sequence));
 
-export async function wonThisMonth(meId?: number) {
+export async function wonThisMonth(me: CurrentUser, onlyMine: boolean) {
+  const meId = onlyMine ? me.id : undefined;
   const start = new Date();
   start.setDate(1);
   start.setHours(0, 0, 0, 0);
   const [r] = await db
     .select({ n: sql<number>`count(*)`, v: sql<number>`coalesce(sum(${leads.expectedRevenue}),0)` })
     .from(leads)
-    .where(and(eq(leads.status, "won"), gte(leads.closedAt, start), meId ? eq(leads.ownerId, meId) : undefined));
+    .where(and(eq(leads.status, "won"), gte(leads.closedAt, start), meId ? eq(leads.ownerId, meId) : undefined, leadScope(me)));
   return { n: Number(r!.n), v: Number(r!.v) };
 }

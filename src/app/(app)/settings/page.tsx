@@ -16,6 +16,7 @@ import { db as _db, aiUsage, settings as settingsT } from "@/db";
 import { eq, gte, sql } from "drizzle-orm";
 import { PageHeader, Avatar } from "@/components/ui";
 import { NewUserForm } from "@/components/new-user-form";
+import { editionHasCrm, editionHasHd } from "@/lib/edition";
 
 export const metadata = { title: "Settings" };
 
@@ -37,12 +38,12 @@ export default async function SettingsPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
-      <PageHeader title="Settings" subtitle="Manage support teams and who can sign in." actions={<a href="/settings/import" className="btn-secondary">Import from Odoo</a>} />
+      <PageHeader title="Settings" subtitle={editionHasHd ? "Manage zones and who can sign in." : "Manage who can sign in."} actions={<a href="/settings/import" className="btn-secondary">Import from Odoo</a>} />
 
       <section className="card">
         <div className="border-b border-slate-100 px-4 py-3">
           <h2 className="font-semibold">Users</h2>
-          <p className="text-xs text-slate-500">Agents handle tickets. Managers see everything. Admins can also change settings.</p>
+          <p className="text-xs text-slate-500">{editionHasCrm && <><b>Sales/CRM — own</b>: only opportunities they own, are assigned to, or follow. </>}{editionHasHd && <><b>Helpdesk — own zone(s)</b>: only tickets in the zones ticked under “Zones” below, plus tickets assigned to them or that they follow. </>}Admins can also change settings. There is no limit on the number of users.</p>
         </div>
         <ul className="divide-y divide-slate-100">
           {us.map((u) => (
@@ -53,11 +54,24 @@ export default async function SettingsPage() {
                   <div className={`text-sm font-medium ${u.active ? "" : "text-slate-400 line-through"}`}>{u.name}</div>
                   <div className="truncate text-xs text-slate-500">{u.email}</div>
                 </div>
-                <select name="role" defaultValue={u.role} disabled={u.id === me.id} className="input w-auto py-1.5">
-                  <option value="agent">Agent</option>
-                  <option value="manager">Manager</option>
-                  <option value="admin">Admin</option>
-                </select>
+                <input name="title" defaultValue={u.title ?? ""} placeholder="Title, e.g. Zonal Manager" className="input w-44 py-1.5 text-xs" />
+                {editionHasCrm && <label className="text-[11px] text-slate-500">Sales/CRM
+                  <select name="crmAccess" defaultValue={u.crmAccess} disabled={u.id === me.id} className="input block w-auto py-1 text-xs">
+                    <option value="none">No access</option><option value="own">Own + followed</option><option value="all">All opportunities</option>
+                  </select>
+                </label>}
+                {editionHasHd && <label className="text-[11px] text-slate-500">Helpdesk/O&M
+                  <select name="hdAccess" defaultValue={u.hdAccess} disabled={u.id === me.id} className="input block w-auto py-1 text-xs">
+                    <option value="none">No access</option><option value="zone">Own zone(s)</option><option value="all">All zones</option>
+                  </select>
+                </label>}
+                <label className="text-[11px] text-slate-500">Role
+                  <select name="role" defaultValue={u.role} disabled={u.id === me.id} className="input block w-auto py-1 text-xs">
+                    <option value="agent">User</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin (settings)</option>
+                  </select>
+                </label>
                 <input name="password" placeholder="New password" className="input w-36 py-1.5" />
                 <label className="flex items-center gap-1.5 text-xs text-slate-600">
                   <input type="checkbox" name="active" defaultChecked={u.active} disabled={u.id === me.id} className="accent-brand-600" /> Active
@@ -67,9 +81,10 @@ export default async function SettingsPage() {
             </li>
           ))}
         </ul>
-        <NewUserForm />
+        <NewUserForm crm={editionHasCrm} hd={editionHasHd} zones={ts.filter((t) => t.active).map((t) => ({ id: t.id, name: t.location ?? t.name }))} />
       </section>
 
+      {editionHasHd && <>
       <section className="card p-4 text-sm">
         <h2 className="font-semibold">Rochem HO — copied on every complaint</h2>
         <p className="mb-2 text-xs text-slate-500">These addresses automatically follow every ticket: they get the new-complaint email, every reply in the chain, and the closure mail with TAT.</p>
@@ -124,6 +139,7 @@ export default async function SettingsPage() {
         </form>
       </section>
 
+      </>}
       <section className="card">
         <div className="border-b border-slate-100 px-4 py-3">
           <h2 className="font-semibold">Company details</h2>
@@ -147,10 +163,10 @@ export default async function SettingsPage() {
           <div className="mt-1 space-y-2 text-slate-600">
             <p>{ai.mock ? "Running in demo mode (AI_PROVIDER=mock) — answers are canned." : <>Connected to <b className="font-medium text-slate-800">{new URL(ai.base).host}</b> using <b className="font-medium text-slate-800">{ai.model}</b>.</>}</p>
             <p>Last 7 days: {Number(usage!.n)} requests{Number(usage!.err) ? `, ${usage!.err} failed` : ""}{Number(usage!.tok) ? `, ~${Number(usage!.tok).toLocaleString("en-IN")} tokens` : ""}.</p>
-            <form action={setAutoTriage.bind(null, !autoTriage)} className="flex items-center gap-3">
+            {editionHasHd && <form action={setAutoTriage.bind(null, !autoTriage)} className="flex items-center gap-3">
               <span>Auto-triage tickets that arrive by email: <b className="font-medium text-slate-800">{autoTriage ? "On" : "Off"}</b></span>
               <button className="btn-secondary py-1 text-xs">{autoTriage ? "Turn off" : "Turn on"}</button>
-            </form>
+            </form>}
           </div>
         ) : (
           <p className="mt-1 text-slate-600">AI is off. Get a free key at aistudio.google.com/apikey and set AI_API_KEY in .env, then restart. (Free-tier prompts may be used by Google to improve its models — use a paid key if that matters.)</p>
@@ -164,10 +180,10 @@ export default async function SettingsPage() {
         </p>
       </section>
 
-      <section className="card">
+      {editionHasHd && <section className="card">
         <div className="border-b border-slate-100 px-4 py-3">
-          <h2 className="font-semibold">Support teams</h2>
-          <p className="text-xs text-slate-500">One team per location. Tap a person to add or remove them from a team.</p>
+          <h2 className="font-semibold">Zones (support teams)</h2>
+          <p className="text-xs text-slate-500">One zone per region. Tap a person to give them that zone — zonal users only see tickets of their own zone(s).</p>
         </div>
         <ul className="divide-y divide-slate-100">
           {ts.map((t) => {
@@ -198,7 +214,7 @@ export default async function SettingsPage() {
           <input name="location" required placeholder="New location, e.g. Bharuch" className="input" />
           <button className="btn-primary">Add team</button>
         </form>
-      </section>
+      </section>}
     </div>
   );
 }

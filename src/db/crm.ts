@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, real, index, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sqliteTable, integer, text, real, index, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
 import { relations, sql } from "drizzle-orm";
 import { users, customers, contacts } from "./schema";
 
@@ -14,12 +14,17 @@ export const crmStages = sqliteTable("crm_stages", {
 });
 
 export const LEAD_STATUS = ["open", "won", "lost"] as const;
+export const PROPOSAL_STATUS = ["not_started", "preparing", "submitted", "revised", "under_negotiation", "accepted", "rejected"] as const;
 
 export const leads = sqliteTable(
   "leads",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
     title: text("title").notNull(),
+    kind: text("kind", { enum: ["lead", "opportunity"] }).notNull().default("opportunity"),
+    product: text("product"), // product / service being offered
+    proposalStatus: text("proposal_status", { enum: PROPOSAL_STATUS }).notNull().default("not_started"),
+    convertedAt: integer("converted_at", { mode: "timestamp" }),
     customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
     contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }),
     // for prospects not yet in customers
@@ -48,6 +53,17 @@ export const leads = sqliteTable(
   (t) => [index("leads_stage").on(t.stageId, t.status), index("leads_owner").on(t.ownerId)],
 );
 
+// followers / co-assigned users on an opportunity (they can see it even with "own" access)
+export const leadMembers = sqliteTable(
+  "lead_members",
+  {
+    leadId: integer("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    role: text("role", { enum: ["follower", "assigned"] }).notNull().default("follower"),
+  },
+  (t) => [primaryKey({ columns: [t.leadId, t.userId] })],
+);
+
 export const ACTIVITY_TYPES = ["call", "meeting", "visit", "email", "todo"] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
@@ -58,7 +74,12 @@ export const activities = sqliteTable(
     type: text("type", { enum: ACTIVITY_TYPES }).notNull().default("call"),
     summary: text("summary").notNull(),
     note: text("note"),
-    outcome: text("outcome"), // filled when done (call report)
+    outcome: text("outcome"), // filled when done (call / visit report)
+    discussion: text("discussion"), // discussion points / meeting notes
+    nextAction: text("next_action"),
+    location: text("location"),
+    contactId: integer("contact_id").references(() => contacts.id, { onDelete: "set null" }),
+    durationMin: integer("duration_min"),
     leadId: integer("lead_id").references(() => leads.id, { onDelete: "cascade" }),
     customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
     userId: integer("user_id").references(() => users.id, { onDelete: "set null" }), // assigned to
@@ -141,12 +162,14 @@ export const leadsRelations = relations(leads, ({ one, many }) => ({
   owner: one(users, { fields: [leads.ownerId], references: [users.id] }),
   activities: many(activities),
   notes: many(leadNotes),
+  members: many(leadMembers),
   quotations: many(quotations),
 }));
 export const activitiesRelations = relations(activities, ({ one }) => ({
   lead: one(leads, { fields: [activities.leadId], references: [leads.id] }),
   customer: one(customers, { fields: [activities.customerId], references: [customers.id] }),
   user: one(users, { fields: [activities.userId], references: [users.id] }),
+  contact: one(contacts, { fields: [activities.contactId], references: [contacts.id] }),
 }));
 export const leadNotesRelations = relations(leadNotes, ({ one }) => ({
   lead: one(leads, { fields: [leadNotes.leadId], references: [leads.id] }),
@@ -175,3 +198,8 @@ export const aiUsage = sqliteTable("ai_usage", {
   error: text("error"),
   createdAt: createdAt(),
 });
+
+export const leadMembersRelations = relations(leadMembers, ({ one }) => ({
+  lead: one(leads, { fields: [leadMembers.leadId], references: [leads.id] }),
+  user: one(users, { fields: [leadMembers.userId], references: [users.id] }),
+}));

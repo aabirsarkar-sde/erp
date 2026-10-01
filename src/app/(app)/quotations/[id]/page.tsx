@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db, quotations, quotationLines, products } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { canSeeQuotation } from "@/lib/access";
 import { lookups } from "@/lib/queries";
 import { setQuoteStatus, reviseQuotation, deleteQuotation } from "@/app/actions/quotations";
 import { QuoteEditor } from "@/components/quote-editor";
@@ -13,8 +14,9 @@ import { quoteRef } from "@/lib/crm";
 import { inr } from "@/lib/format";
 
 export default async function QuotationPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  const me = await requireUser();
   const id = Number((await params).id);
+  if (!Number.isFinite(id) || !(await canSeeQuotation(me, id))) notFound();
   const [q, lk, prods] = await Promise.all([
     db.query.quotations.findFirst({ where: eq(quotations.id, id), with: { lines: { orderBy: asc(quotationLines.sort) }, lead: { columns: { id: true, title: true } }, customer: true } }),
     lookups(),

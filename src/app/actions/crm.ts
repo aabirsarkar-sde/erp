@@ -3,14 +3,18 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
-import { db, leads, leadNotes, activities, crmStages, customers, contacts, users, ACTIVITY_TYPES } from "@/db";
+import { db, leads, leadNotes, activities, crmStages, customers, contacts, users, leadMembers, documents, ACTIVITY_TYPES, PROPOSAL_STATUS } from "@/db";
+import { saveFile, MAX_UPLOAD } from "@/lib/storage";
+import { PROPOSAL_META } from "@/lib/crm";
 import { requireUser } from "@/lib/auth";
+import { guardLead, hasCrm, activityScope } from "@/lib/access";
 import { inr } from "@/lib/format";
+import { fromLocalInput } from "@/lib/tz";
 
 const optInt = z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nullable());
 const optStr = z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : null), z.string().nullable());
 const money = z.preprocess((v) => Number(String(v ?? "0").replace(/[₹,\s]/g, "")) || 0, z.number().int().min(0));
-const optDate = z.preprocess((v) => (typeof v === "string" && v ? new Date(v) : null), z.date().nullable());
+const optDate = z.preprocess((v) => (typeof v === "string" && v ? fromLocalInput(v) : null), z.date().nullable());
 
 const refresh = (id?: number) => {
   revalidatePath("/crm");
@@ -24,6 +28,9 @@ async function log(leadId: number, authorId: number, body: string, kind: "note" 
 
 const leadSchema = z.object({
   title: z.string().trim().min(2, "Give the opportunity a name"),
+  kind: z.enum(["lead", "opportunity"]).optional(),
+  product: optStr,
+  proposalStatus: z.enum(PROPOSAL_STATUS).optional(),
   customerId: optInt,
   companyName: optStr,
   contactName: optStr,
@@ -44,6 +51,7 @@ const leadSchema = z.object({
 
 export async function createLead(_p: { error?: string } | undefined, fd: FormData) {
   const me = await requireUser();
+  if (!hasCrm(me)) return { error: "You don't have CRM access." };
   const r = leadSchema.safeParse(Object.fromEntries(fd));
   if (!r.success) return { error: r.error.issues[0]!.message };
   const d = r.data;
@@ -66,18 +74,20 @@ export async function createLead(_p: { error?: string } | undefined, fd: FormDat
     .insert(leads)
     .values({ ...d, customerId, contactId, stageId: stage.id, probability: d.probability ?? stage.probability, ownerId: d.ownerId ?? me.id, sortOrder: -Date.now() / 1e6 })
     .returning();
-  await log(l!.id, me.id, "Opportunity created");
+  await log(l!.id, me.id, d.kind === "lead" ? "Lead created" : "Opportunity created");
   refresh();
   redirect(`/crm/${l!.id}`);
 }
 
 export async function updateLead(id: number, fd: FormData) {
   const me = await requireUser();
+  await guardLead(me, id);
   const d = leadSchema.partial().parse(Object.fromEntries(fd));
   const old = await db.query.leads.findFirst({ where: eq(leads.id, id) });
   if (!old) return;
   const events: string[] = [];
   if (d.expectedRevenue != null && d.expectedRevenue !== old.expectedRevenue) events.push(`Expected revenue: ${inr(old.expectedRevenue)} → ${inr(d.expectedRevenue)}`);
+  if (d.proposalStatus && d.proposalStatus !== old.proposalStatus) events.push(`Proposal status: ${PROPOSAL_META[old.proposalStatus].label} → ${PROPOSAL_META[d.proposalStatus].label}`);
   if (d.ownerId !== undefined && d.ownerId !== old.ownerId) {
     const u = d.ownerId ? await db.query.users.findFirst({ where: eq(users.id, d.ownerId) }) : null;
     events.push(`Salesperson: ${u?.name ?? "none"}`);
@@ -89,6 +99,7 @@ export async function updateLead(id: number, fd: FormData) {
 
 export async function moveLead(id: number, stageId: number, sortOrder?: number) {
   const me = await requireUser();
+  await guardLead(me, id);
   const [old, stage] = await Promise.all([
     db.query.leads.findFirst({ where: eq(leads.id, id), with: { stage: true } }),
     db.query.crmStages.findFirst({ where: eq(crmStages.id, stageId) }),
@@ -104,6 +115,7 @@ export async function moveLead(id: number, stageId: number, sortOrder?: number) 
 
 export async function markWon(id: number) {
   const me = await requireUser();
+  await guardLead(me, id);
   await db.update(leads).set({ status: "won", probability: 100, closedAt: new Date(), updatedAt: new Date() }).where(eq(leads.id, id));
   await log(id, me.id, "🎉 Marked as WON");
   refresh(id);
@@ -111,6 +123,7 @@ export async function markWon(id: number) {
 
 export async function markLost(id: number, fd: FormData) {
   const me = await requireUser();
+  await guardLead(me, id);
   const reason = String(fd.get("reason") || "Other");
   await db.update(leads).set({ status: "lost", probability: 0, lostReason: reason, closedAt: new Date(), updatedAt: new Date() }).where(eq(leads.id, id));
   await log(id, me.id, `Marked as lost — ${reason}`);
@@ -119,6 +132,7 @@ export async function markLost(id: number, fd: FormData) {
 
 export async function reopenLead(id: number) {
   const me = await requireUser();
+  await guardLead(me, id);
   const l = await db.query.leads.findFirst({ where: eq(leads.id, id), with: { stage: true } });
   await db.update(leads).set({ status: "open", lostReason: null, closedAt: null, probability: l?.stage.probability ?? 10, updatedAt: new Date() }).where(eq(leads.id, id));
   await log(id, me.id, "Reopened");
@@ -127,6 +141,7 @@ export async function reopenLead(id: number) {
 
 export async function addLeadNote(id: number, _p: { ok?: boolean } | undefined, fd: FormData) {
   const me = await requireUser();
+  await guardLead(me, id);
   const body = String(fd.get("body") || "").trim();
   if (!body) return { ok: false };
   await log(id, me.id, body, "note");
@@ -144,6 +159,11 @@ const actSchema = z.object({
   leadId: optInt,
   customerId: optInt,
   outcome: optStr,
+  discussion: optStr,
+  nextAction: optStr,
+  location: optStr,
+  contactId: optInt,
+  durationMin: optInt,
   done: z.preprocess((v) => v === "on" || v === "true", z.boolean()).optional(),
 });
 
@@ -152,6 +172,8 @@ export async function createActivity(_p: { ok?: boolean; error?: string } | unde
   const r = actSchema.safeParse(Object.fromEntries(fd));
   if (!r.success) return { error: r.error.issues[0]!.message };
   const { done, ...d } = r.data;
+  if (!hasCrm(me) && d.leadId) return { error: "You don't have CRM access." };
+  if (d.leadId) await guardLead(me, d.leadId);
   let customerId = d.customerId;
   if (d.leadId && !customerId) customerId = (await db.query.leads.findFirst({ where: eq(leads.id, d.leadId) }))?.customerId ?? null;
   await db.insert(activities).values({
@@ -162,16 +184,52 @@ export async function createActivity(_p: { ok?: boolean; error?: string } | unde
     dueAt: d.dueAt ?? new Date(),
     doneAt: done ? new Date() : null,
   });
+  if (done) await followUp(me.id, { ...d, customerId }, fd);
   if (d.leadId) {
     await db.update(leads).set({ updatedAt: new Date() }).where(eq(leads.id, d.leadId));
     if (done) await log(d.leadId, me.id, `Logged ${d.type}: ${d.summary}${d.outcome ? ` — ${d.outcome}` : ""}`);
   }
   refresh(d.leadId ?? undefined);
+  revalidatePath("/calendar");
+  if (fd.get("redirect")) redirect(String(fd.get("redirect")));
+  return { ok: true };
+}
+
+/** "Next action" with a date → schedule the follow-up automatically */
+async function followUp(meId: number, a: { leadId?: number | null; customerId?: number | null; contactId?: number | null; userId?: number | null; summary: string; nextAction?: string | null }, fd: FormData) {
+  const nextAt = String(fd.get("nextAt") || "");
+  if (!nextAt || !a.nextAction) return;
+  const type = ACTIVITY_TYPES.includes(fd.get("nextType") as never) ? (fd.get("nextType") as (typeof ACTIVITY_TYPES)[number]) : "call";
+  await db.insert(activities).values({ type, summary: a.nextAction, note: `Follow-up from: ${a.summary}`, leadId: a.leadId ?? null, customerId: a.customerId ?? null, contactId: a.contactId ?? null, userId: a.userId ?? meId, createdById: meId, dueAt: fromLocalInput(nextAt) ?? new Date() });
+  if (a.leadId) await log(a.leadId, meId, `Follow-up scheduled: ${a.nextAction} (${nextAt.replace("T", " ")})`);
+}
+
+/** visit / call report — completes the activity with notes, outcome and next action */
+export async function saveActivityReport(id: number, _p: { ok?: boolean; error?: string } | undefined, fd: FormData) {
+  const me = await requireUser();
+  await guardActivity(me, id);
+  const a = await db.query.activities.findFirst({ where: eq(activities.id, id) });
+  if (!a) return { error: "Activity not found." };
+  const s = (k: string) => String(fd.get(k) ?? "").trim() || null;
+  const outcome = s("outcome");
+  if (!outcome) return { error: "Write the outcome." };
+  const dur = Number(fd.get("durationMin")) || null;
+  const wasDone = !!a.doneAt;
+  await db.update(activities).set({ discussion: s("discussion"), outcome, nextAction: s("nextAction"), location: s("location") ?? a.location, durationMin: dur ?? a.durationMin, doneAt: a.doneAt ?? new Date() }).where(eq(activities.id, id));
+  await followUp(me.id, { ...a, nextAction: s("nextAction") }, fd);
+  if (a.leadId) {
+    await db.update(leads).set({ updatedAt: new Date() }).where(eq(leads.id, a.leadId));
+    await log(a.leadId, me.id, `${wasDone ? "Updated report" : "Done"} ${a.type}: ${a.summary} — ${outcome}`);
+  }
+  refresh(a.leadId ?? undefined);
+  revalidatePath(`/activities/${id}`);
+  revalidatePath("/calendar");
   return { ok: true };
 }
 
 export async function completeActivity(id: number, fd: FormData) {
   const me = await requireUser();
+  await guardActivity(me, id);
   const outcome = String(fd.get("outcome") || "").trim() || null;
   const a = await db.query.activities.findFirst({ where: eq(activities.id, id) });
   if (!a) return;
@@ -181,8 +239,66 @@ export async function completeActivity(id: number, fd: FormData) {
 }
 
 export async function deleteActivity(id: number) {
-  await requireUser();
+  const me = await requireUser();
+  await guardActivity(me, id);
   const a = await db.query.activities.findFirst({ where: eq(activities.id, id) });
   await db.delete(activities).where(and(eq(activities.id, id)));
   refresh(a?.leadId ?? undefined);
+}
+
+async function guardActivity(me: Awaited<ReturnType<typeof requireUser>>, id: number) {
+  const r = await db.select({ id: activities.id }).from(activities).where(and(eq(activities.id, id), activityScope(me))).limit(1);
+  if (!r.length) throw new Error("You don't have access to this activity.");
+}
+
+export async function addLeadMember(id: number, fd: FormData) {
+  const me = await requireUser();
+  await guardLead(me, id);
+  const userId = Number(fd.get("userId"));
+  const role = fd.get("role") === "assigned" ? "assigned" : "follower";
+  const u = userId ? await db.query.users.findFirst({ where: eq(users.id, userId) }) : null;
+  if (!u) return;
+  await db.insert(leadMembers).values({ leadId: id, userId, role }).onConflictDoUpdate({ target: [leadMembers.leadId, leadMembers.userId], set: { role } });
+  await log(id, me.id, `${u.name} added as ${role === "assigned" ? "assigned salesperson" : "follower"}`);
+  refresh(id);
+}
+
+export async function removeLeadMember(id: number, userId: number) {
+  const me = await requireUser();
+  await guardLead(me, id);
+  await db.delete(leadMembers).where(and(eq(leadMembers.leadId, id), eq(leadMembers.userId, userId)));
+  refresh(id);
+}
+
+export async function convertToOpportunity(id: number) {
+  const me = await requireUser();
+  await guardLead(me, id);
+  await db.update(leads).set({ kind: "opportunity", convertedAt: new Date(), updatedAt: new Date() }).where(eq(leads.id, id));
+  await log(id, me.id, "Converted from lead to opportunity");
+  refresh(id);
+  revalidatePath("/crm/leads");
+}
+
+/** proposals & other documents uploaded against an opportunity */
+export async function uploadLeadDocs(id: number, _p: { ok?: boolean; error?: string } | undefined, fd: FormData) {
+  const me = await requireUser();
+  await guardLead(me, id);
+  const files = fd.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  if (!files.length) return { error: "Choose a file." };
+  const big = files.find((f) => f.size > MAX_UPLOAD);
+  if (big) return { error: `${big.name} is larger than ${MAX_UPLOAD / 1024 / 1024} MB.` };
+  const l = await db.query.leads.findFirst({ where: eq(leads.id, id) });
+  const description = String(fd.get("description") ?? "").trim() || null;
+  const isProposal = fd.get("isProposal") === "on";
+  for (const f of files) {
+    const storageKey = await saveFile(f);
+    await db.insert(documents).values({ name: f.name, mime: f.type || "application/octet-stream", size: f.size, storageKey, leadId: id, customerId: l?.customerId ?? null, description: isProposal ? `Proposal${description ? ` — ${description}` : ""}` : description, uploadedById: me.id });
+    await log(id, me.id, `${isProposal ? "Proposal" : "Document"} uploaded: ${f.name}`);
+  }
+  if (isProposal && l && ["not_started", "preparing"].includes(l.proposalStatus)) {
+    await db.update(leads).set({ proposalStatus: "submitted", updatedAt: new Date() }).where(eq(leads.id, id));
+    await log(id, me.id, "Proposal status: Submitted");
+  }
+  refresh(id);
+  return { ok: true };
 }

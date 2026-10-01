@@ -83,6 +83,32 @@ Photos are shrunk in the browser before upload, to roughly 100–300 KB each. Fi
    - Daily escalation email for overdue or unassigned tickets (Vercel Cron; set `CRON_SECRET`).
    - Plants master (`/plants`), importable from CSV.
 
+## Departments & access (client spec, Oct 2026)
+
+Every user has three switches in **Settings → Users**:
+
+| Setting | Values | Meaning |
+|---|---|---|
+| Sales / CRM access | none · own · all | *own* = opportunities they own, are assigned to or follow; *all* = everything (Chandan, Aarti) |
+| Helpdesk access | none · zone · all | *zone* = tickets in their zones + tickets assigned to them or that they follow; *all* = every zone |
+| Zones | checkboxes | which zones a zonal manager belongs to |
+
+Menus, dashboards, reports, search, AI answers, exports and direct URLs all respect these (a hidden record returns 404).
+
+Seeded logins (password `raybon123`, admin is `admin123`): admin@ (Chandan), aarti@, gaurang@, priyank@ (sales, own),
+haridutt@, hina@, rehan@ (O&M, all zones), rakesh@ / nilesh@ / priya@ (zonal managers).
+
+## Sales & marketing flow
+
+Lead → convert to Opportunity → activities / visits from the calendar → proposal upload (status tracked) → follow-ups → Won / Lost.
+
+- **Leads** (`/crm/leads`) and **Opportunities** (`/crm`) are separate lists; one click converts.
+- Opportunity holds company, contact, product/service offered, inquiry details, proposal status + uploaded proposals, followers/assignees, full history.
+- **Calendar = activity platform**: click an hour slot (or "+ Activity / visit") to plan a call/meeting/visit linked to client, contact and opportunity.
+  Open it later to write the **visit / call report** (discussion points, outcome, next action). A next action with a date schedules the follow-up automatically.
+  Reports appear in the opportunity history, the client's activity timeline and the visit report.
+- **Sales reports** (`/sales-reports`): pipeline by stage, by salesperson, lead sources, proposal status, lost reasons, won/lost and the visit report — Excel and PDF.
+
 ## Moving data over from Odoo
 
 Log in as admin and go to Settings → Import from Odoo. Import **contacts first**, then opportunities, then tickets. On each screen, the Odoo list view's Export button gives a CSV. The import page says which columns to tick for each.
@@ -101,12 +127,30 @@ On the Calendar page, open "Sync with Outlook, Google or Apple Calendar" and cop
 | `npm run db:studio` | Opens a database browser |
 | `npm run build` | Production build |
 
-## Deploy for free
+## Two products, one codebase
 
-1. Create a database on [Turso](https://turso.tech) (free tier). Then run `turso db show <name> --url` and `turso db tokens create <name>`.
-2. Push this repo to GitHub and import it on [Vercel](https://vercel.com) (free tier).
-3. Set these environment variables on Vercel: `DATABASE_URL` (the libsql:// URL), `DATABASE_AUTH_TOKEN`, and `AUTH_SECRET` (a long random string).
-4. Create the tables in Turso from your machine: `DATABASE_URL=... DATABASE_AUTH_TOKEN=... npm run db:push`. Then either run `npm run db:seed` the same way for sample data, or add real users in Settings.
+The client runs Sales and O&M as **separate software**. The same code is deployed twice; the `APP_EDITION` env var decides which product a deployment is:
+
+| | `APP_EDITION=crm` | `APP_EDITION=helpdesk` |
+|---|---|---|
+| Name / colour | Raybon Sales CRM (blue) | Raybon O&M Helpdesk (teal) |
+| Modules | Leads, opportunities, activities & visits, quotations, sales reports | Complaints/tickets, helpdesk dashboard, SLA reports, plants, customer portal, escalation emails |
+| Shared modules | Calendar, Discuss, Documents, Customers, Ask AI, Insights, Settings | same |
+| Who can sign in | users with Sales/CRM access (and admins) | users with Helpdesk access (and admins) |
+
+Each product has its **own database**, so users, customers and records are separate. Routes of the other product return 404.
+Leave `APP_EDITION` empty locally to run both together in one app.
+
+Local trial of one product: `APP_EDITION=crm DATABASE_URL=file:crm.db npx drizzle-kit push --force && APP_EDITION=crm DATABASE_URL=file:crm.db npm run db:seed && APP_EDITION=crm DATABASE_URL=file:crm.db npm run dev`
+
+## Deploy for free (do this once per product)
+
+1. Create **two** databases on [Turso](https://turso.tech) (free tier), e.g. `raybon-crm` and `raybon-helpdesk`. For each: `turso db show <name> --url` and `turso db tokens create <name>`.
+2. On [Vercel](https://vercel.com) import the same GitHub repo **twice** (two projects, e.g. `raybon-crm` and `raybon-helpdesk`).
+3. In each project set: `APP_EDITION` (`crm` or `helpdesk`), `DATABASE_URL` + `DATABASE_AUTH_TOKEN` (that product's database), `AUTH_SECRET` (a different long random string per project), `APP_URL` (that project's URL), plus Blob/SMTP/AI keys as needed. `CRON_SECRET` and `INBOUND_EMAIL_SECRET` only matter for the helpdesk.
+4. Create tables and sample data from your machine, once per database:
+   `APP_EDITION=crm DATABASE_URL=... DATABASE_AUTH_TOKEN=... npx drizzle-kit push --force` then the same with `npm run db:seed` (and again with `helpdesk` and the other database).
+5. Every `git push` redeploys both projects.
 
 ## Code layout
 

@@ -3,13 +3,16 @@ import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db, tickets, messages } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { assertTicket } from "@/lib/access";
 import { PrintShell } from "@/components/print-shell";
 import { STAGE_META, PRIORITIES, ticketRef } from "@/lib/constants";
 import { fmtDateTime, fmtTat } from "@/lib/format";
 
 export default async function PrintTicket({ params }: { params: Promise<{ id: string }> }) {
-  await requireUser();
+  const me = await requireUser();
   const id = Number((await params).id);
+  if (!Number.isFinite(id)) notFound();
+  await assertTicket(me, id);
   const t = await db.query.tickets.findFirst({
     where: eq(tickets.id, id),
     with: { customer: true, plant: true, team: true, assignee: true, closedBy: true, messages: { orderBy: asc(messages.createdAt), with: { author: true } } },

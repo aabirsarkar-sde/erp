@@ -3,7 +3,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { IconHome, IconTicket, IconPlus, IconFunnel, IconMenu } from "./icons";
-import { NAV, type Item } from "@/lib/nav-config";
+import { visibleNav, type Item, type Access } from "@/lib/nav-config";
 
 const isActive = (path: string, href: string, exact?: boolean) => (exact ? path === href : path === href || path.startsWith(href + "/"));
 
@@ -20,17 +20,18 @@ function useChatUnread() {
   return n;
 }
 
-export function SideNav({ isAdmin }: { isAdmin: boolean }) {
+export function SideNav({ access }: { access: Access }) {
   const path = usePathname();
   const unread = useChatUnread();
   return (
     <nav className="space-y-4">
-      {NAV.filter((g) => !g.admin || isAdmin).map((g, i) => (
+      {visibleNav(access).map((g, i) => (
         <div key={i}>
           {g.title && <div className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{g.title}</div>}
           <div className="space-y-0.5">
             {g.items.map(({ href, label, icon: I, exact, badge }) => {
-              const a = isActive(path, href, exact) && !(href === "/tickets" && path === "/tickets/new" && false);
+              // most specific match wins (/crm/leads shouldn't also light up /crm)
+              const a = isActive(path, href, exact) && !g.items.some((o) => o.href !== href && o.href.startsWith(href + "/") && isActive(path, o.href));
               return (
                 <Link key={href} href={href} className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition ${a ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"}`}>
                   <I className="size-[18px]" />
@@ -46,14 +47,14 @@ export function SideNav({ isAdmin }: { isAdmin: boolean }) {
   );
 }
 
-export function BottomNav() {
+export function BottomNav({ access }: { access: Access }) {
   const path = usePathname();
   const unread = useChatUnread();
   const items: (Item & { primary?: boolean })[] = [
     { href: "/", label: "Home", icon: IconHome, exact: true },
-    { href: "/tickets", label: "Tickets", icon: IconTicket },
-    { href: "/tickets/new", label: "Ticket", icon: IconPlus, primary: true },
-    { href: "/crm", label: "Pipeline", icon: IconFunnel },
+    ...(access.hd ? [{ href: "/tickets", label: "Tickets", icon: IconTicket }] : []),
+    access.hd ? { href: "/tickets/new", label: "Ticket", icon: IconPlus, primary: true } : { href: "/calendar/activity", label: "Activity", icon: IconPlus, primary: true },
+    ...(access.crm ? [{ href: "/crm", label: "Pipeline", icon: IconFunnel }] : []),
     { href: "/more", label: "More", icon: IconMenu },
   ];
   const inMore = ["/activities", "/quotations", "/customers", "/reports", "/settings", "/more", "/calendar", "/discuss", "/documents", "/insights", "/ask"].some((p) => path.startsWith(p));

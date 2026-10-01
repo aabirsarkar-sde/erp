@@ -3,14 +3,18 @@ import { and, eq, gte, lt, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db, tickets, teams, plants, customers, users } from "@/db";
 import { COMPLAINT_TYPES, OPEN_STAGES } from "./constants";
+import { ticketScope } from "./access";
+import type { CurrentUser } from "./auth";
 
 export type HdFilters = { days?: string; from?: string; to?: string; zone?: string };
 
-export async function helpdeskRows(f: HdFilters) {
+export async function helpdeskRows(f: HdFilters, me: CurrentUser) {
   const assignee = alias(users, "assignee");
   const closer = alias(users, "closer");
   const at = sql<number>`coalesce(${tickets.reportedAt}, ${tickets.createdAt})`;
   const c: SQL[] = [];
+  const scope = ticketScope(me);
+  if (scope) c.push(scope);
   if (f.from) c.push(gte(at, Math.floor(Date.parse(f.from + "T00:00:00+05:30") / 1000)));
   if (f.to) c.push(lt(at, Math.floor(Date.parse(f.to + "T00:00:00+05:30") / 1000) + 86400));
   if (!f.from && !f.to && f.days !== "all") c.push(gte(at, Math.floor(Date.now() / 1000) - Number(f.days || 90) * 86400));

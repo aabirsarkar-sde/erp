@@ -5,13 +5,14 @@ import { STAGE_META, ticketRef } from "@/lib/constants";
 import { fmtTat } from "@/lib/format";
 
 export async function GET(req: Request) {
-  if (!(await getCurrentUser())) return new Response("Unauthorized", { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return new Response("Unauthorized", { status: 401 });
   const f = Object.fromEntries(new URL(req.url).searchParams);
-  const rows = await helpdeskRows(f);
+  const rows = await helpdeskRows(f, me);
   const s = summary(rows);
   const wb = newWorkbook();
   addSheet(wb, "Summary", [{ header: "Measure", key: "k", width: 26 }, { header: "Value", key: "v", width: 18 }], [
-    { k: "Total tickets", v: s.total }, { k: "Open", v: s.open }, { k: "Closed", v: s.closed },
+    { k: "Total tickets", v: s.total }, { k: "Open", v: s.open }, { k: "Done", v: s.closed },
     { k: "Average TAT", v: fmtTat(s.avgTat) }, { k: "Average TAT (hours)", v: s.avgTat != null ? +(s.avgTat / 60).toFixed(1) : "" },
     { k: "Median TAT", v: fmtTat(s.medianTat) }, { k: "Customer rating (avg of 5)", v: s.csat != null ? +s.csat.toFixed(2) : "" },
   ], "Helpdesk dashboard — summary");

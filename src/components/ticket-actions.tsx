@@ -74,9 +74,9 @@ export function ResolveButton({ ticketId, complainant }: { ticketId: number; com
   const clear = () => { canvas.current!.getContext("2d")!.clearRect(0, 0, 600, 200); setSigned(false); if (sigInput.current) sigInput.current.value = ""; };
 
   return (
-    <Popover label="Close ticket" primary open={open} setOpen={setOpen}>
+    <Popover label="Mark done" primary open={open} setOpen={setOpen}>
       <form action={action} className="space-y-2">
-        <div className="text-sm font-semibold">Close ticket — TAT will be stamped</div>
+        <div className="text-sm font-semibold">Mark done — TAT will be stamped</div>
         <textarea name="note" rows={2} className="input" placeholder="What was done to resolve it? (recommended)" />
         <div>
           <div className="mb-1 flex items-center justify-between text-xs text-slate-500"><span>Customer sign-off (optional — draw with finger/mouse)</span>{signed && <button type="button" onClick={clear} className="underline">Clear</button>}</div>
@@ -85,7 +85,7 @@ export function ResolveButton({ ticketId, complainant }: { ticketId: number; com
           <input name="signedBy" defaultValue={complainant ?? ""} placeholder="Signed by (name)" className="input mt-1.5 py-1.5 text-sm" />
         </div>
         {state?.error && <p className="text-xs text-red-600">{state.error}</p>}
-        <button disabled={pending} className="btn-primary w-full">{pending ? "Closing…" : "Close & stamp TAT"}</button>
+        <button disabled={pending} className="btn-primary w-full">{pending ? "Saving…" : "Done & stamp TAT"}</button>
       </form>
     </Popover>
   );

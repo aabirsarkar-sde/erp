@@ -1,4 +1,5 @@
 "use server";
+import { BRAND, editionHasCrm, editionHasHd } from "@/lib/edition";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -11,6 +12,8 @@ export async function login(_prev: { error?: string } | undefined, fd: FormData)
   const password = String(fd.get("password") || "");
   const u = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (!u || !u.active || !bcrypt.compareSync(password, u.passwordHash)) return { error: "Wrong email or password." };
+  const canUse = u.role === "admin" || (editionHasCrm && u.crmAccess !== "none") || (editionHasHd && u.hdAccess !== "none");
+  if (!canUse) return { error: `Your account doesn't have access to ${BRAND.name}.` };
   (await cookies()).set(SESSION_COOKIE, await signSession({ uid: u.id, role: u.role }), {
     httpOnly: true,
     sameSite: "lax",

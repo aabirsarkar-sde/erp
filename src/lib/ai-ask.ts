@@ -1,12 +1,15 @@
 import "server-only";
+import { BRAND } from "./edition";
 import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lt, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db, tickets, customers, users, teams, leads, crmStages, activities, quotations } from "@/db";
 import { aiChatWithTools, type Msg, type ToolDef } from "./ai";
+import { ticketScope, leadScope, activityScope, quotationScope } from "./access";
+import type { CurrentUser } from "./auth";
 import { ticketRef, STAGE_META, PRIORITIES, OPEN_STAGES } from "./constants";
 import { fmtDate, inr, inrShort } from "./format";
 
-type Me = { id: number; name: string; role: string };
+type Me = CurrentUser;
 const DAY = 864e5;
 
 async function userIdByName(name: string | undefined, me: Me): Promise<number | null | undefined> {
@@ -89,6 +92,7 @@ async function run(name: string, a: Record<string, unknown>, me: Me): Promise<un
   if (name === "search_tickets") {
     const assignee = alias(users, "assignee");
     const c: SQL[] = [];
+    const sc = ticketScope(me); if (sc) c.push(sc);
     const st = String(a.status || "open");
     if (st === "open") c.push(inArray(tickets.stage, OPEN_STAGES));
     else if (st !== "all") c.push(eq(tickets.stage, st as (typeof OPEN_STAGES)[number]));
@@ -114,6 +118,7 @@ async function run(name: string, a: Record<string, unknown>, me: Me): Promise<un
     const assignee = alias(users, "assignee");
     const key = g === "team" ? teams.location : g === "category" ? tickets.category : g === "assignee" ? assignee.name : tickets.stage;
     const c: SQL[] = [];
+    const sc = ticketScope(me); if (sc) c.push(sc);
     if (a.open_only) c.push(inArray(tickets.stage, OPEN_STAGES));
     if (a.created_within_days) c.push(gte(tickets.createdAt, new Date(Date.now() - Number(a.created_within_days) * DAY)));
     const rows = await db.select({ key, n: sql<number>`count(*)` }).from(tickets).leftJoin(teams, eq(teams.id, tickets.teamId)).leftJoin(assignee, eq(assignee.id, tickets.assigneeId))
@@ -123,6 +128,7 @@ async function run(name: string, a: Record<string, unknown>, me: Me): Promise<un
   if (name === "search_deals") {
     const owner = alias(users, "owner");
     const c: SQL[] = [];
+    const sc = leadScope(me); if (sc) c.push(sc);
     const st = String(a.status || "open");
     if (st !== "all") c.push(eq(leads.status, st as "open" | "won" | "lost"));
     if (a.stage) c.push(like(crmStages.name, `%${a.stage}%`));
@@ -138,7 +144,7 @@ async function run(name: string, a: Record<string, unknown>, me: Me): Promise<un
   }
   if (name === "pipeline_summary") {
     const uid = await userIdByName(a.owner as string | undefined, me);
-    const own = uid ? eq(leads.ownerId, uid) : undefined;
+    const own = and(uid ? eq(leads.ownerId, uid) : undefined, leadScope(me));
     const rows = await db.select({ stage: crmStages.name, seq: crmStages.sequence, n: sql<number>`count(${leads.id})`, v: sql<number>`coalesce(sum(${leads.expectedRevenue}),0)`, w: sql<number>`coalesce(sum(${leads.expectedRevenue} * ${leads.probability} / 100.0),0)` })
       .from(crmStages).leftJoin(leads, and(eq(leads.stageId, crmStages.id), eq(leads.status, "open"), own)).groupBy(crmStages.id).orderBy(asc(crmStages.sequence));
     const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
@@ -156,6 +162,7 @@ async function run(name: string, a: Record<string, unknown>, me: Me): Promise<un
     const tomorrow = new Date(today.getTime() + DAY);
     const w = String(a.when);
     const c: SQL[] = [];
+    const sc = activityScope(me); if (sc) c.push(sc);
     if (uid) c.push(eq(activities.userId, uid));
     if (w === "overdue") c.push(isNull(activities.doneAt), lt(activities.dueAt, today));
     else if (w === "today") c.push(isNull(activities.doneAt), gte(activities.dueAt, today), lt(activities.dueAt, tomorrow));
@@ -168,9 +175,9 @@ async function run(name: string, a: Record<string, unknown>, me: Me): Promise<un
     const cs = await db.select().from(customers).where(like(customers.name, `%${a.name}%`)).limit(3);
     return Promise.all(cs.map(async (c) => {
       const [t, l, q] = await Promise.all([
-        db.select({ id: tickets.id, subject: tickets.subject, stage: tickets.stage }).from(tickets).where(and(eq(tickets.customerId, c.id), inArray(tickets.stage, OPEN_STAGES))),
-        db.select({ id: leads.id, title: leads.title, status: leads.status, value: leads.expectedRevenue }).from(leads).where(eq(leads.customerId, c.id)),
-        db.select({ number: quotations.number, status: quotations.status, total: quotations.total }).from(quotations).where(eq(quotations.customerId, c.id)),
+        db.select({ id: tickets.id, subject: tickets.subject, stage: tickets.stage }).from(tickets).where(and(eq(tickets.customerId, c.id), inArray(tickets.stage, OPEN_STAGES), ticketScope(me))),
+        db.select({ id: leads.id, title: leads.title, status: leads.status, value: leads.expectedRevenue }).from(leads).where(and(eq(leads.customerId, c.id), leadScope(me))),
+        db.select({ number: quotations.number, status: quotations.status, total: quotations.total }).from(quotations).where(and(eq(quotations.customerId, c.id), quotationScope(me))),
       ]);
       return { customer: c.name, link: `/customers/${c.id}`, city: c.city, openTickets: t.map((x) => ({ ref: ticketRef(x.id), link: `/tickets/${x.id}`, subject: x.subject })), deals: l.map((x) => ({ title: x.title, link: `/crm/${x.id}`, status: x.status, value: inrShort(x.value) })), quotations: q.map((x) => ({ ...x, total: inr(x.total) })) };
     }));
@@ -179,14 +186,16 @@ async function run(name: string, a: Record<string, unknown>, me: Me): Promise<un
 }
 
 export async function askAssistant(history: { role: "user" | "assistant"; content: string }[], me: Me) {
-  const system = `You are the assistant inside Raybon ERP for Zero Discharge Systems Pvt. Ltd. (industrial water treatment: RO, MEE, ZLD). You answer questions about helpdesk tickets, sales deals, activities and customers using the tools — never guess numbers. Today is ${fmtDate(new Date())}. The user is ${me.name} (${me.role}); "my/me" means them.
+  const hd = me.hdAccess !== "none", crm = me.crmAccess !== "none";
+  const about = [hd && "helpdesk tickets", crm && "sales deals, activities", "customers"].filter(Boolean).join(", ");
+  const system = `You are the assistant inside ${BRAND.name} for Zero Discharge Systems Pvt. Ltd. (industrial water treatment: RO, MEE, ZLD). You answer questions about ${about} using the tools — never guess numbers. Today is ${fmtDate(new Date())}. The user is ${me.name} (${me.role}); "my/me" means them.
 Style: short and direct. Use bullet points for lists. Money in Indian format (₹, lakh, crore). When you mention a ticket, deal or customer, link it with markdown using the "link" field, e.g. [TKT-0012](/tickets/12). If something can't be answered with the tools, say so briefly.`;
   const messages: Msg[] = [{ role: "system", content: system }, ...history.slice(-10)];
   return aiChatWithTools({
     feature: "ask",
     userId: me.id,
     messages,
-    tools,
+    tools: tools.filter((t) => (hd || !["search_tickets", "ticket_stats"].includes(t.function.name)) && (crm || !["search_deals", "pipeline_summary", "list_activities"].includes(t.function.name))),
     run: (n, a) => run(n, a, me),
     mock: async (q) => {
       const s = q.toLowerCase();

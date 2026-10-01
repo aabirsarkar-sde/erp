@@ -13,7 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function Dashboard() {
   const me = await requireUser();
-  const [teams, mine, recent] = await Promise.all([teamStats(), myStats(me.id), listTickets({ sort: "updated", stage: "all" }, me.id, 8)]);
+  const hd = me.hdAccess !== "none", crm = me.crmAccess !== "none";
+  const [teams, mine, recent] = await Promise.all([teamStats(me), myStats(me), listTickets({ sort: "updated", stage: "all" }, me, 8)]);
   const tomorrow = new Date(); tomorrow.setHours(24, 0, 0, 0);
   const [[acts], [pipe]] = await Promise.all([
     db.select({ n: sql<number>`count(*)`, late: sql<number>`coalesce(sum(case when ${activities.dueAt} < ${Math.floor(new Date().setHours(0, 0, 0, 0) / 1000)} then 1 else 0 end),0)` })
@@ -30,18 +31,21 @@ export default async function Dashboard() {
       {aiEnabled() && (
         <form action="/ask" className="mb-5 flex items-center gap-2 rounded-xl border border-violet-200 bg-gradient-to-r from-violet-50 to-fuchsia-50 p-2 pl-3">
           <Sparkle className="size-5 shrink-0 text-violet-600" />
-          <input name="q" placeholder="Ask anything — “urgent tickets in Dahej”, “my HOT deals over 1 crore”…" className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-violet-400" />
+          <input name="q" placeholder={`Ask anything — ${[hd && "“urgent tickets in Dahej”", crm && "“my HOT deals over 1 crore”"].filter(Boolean).join(", ")}…`} className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-violet-400" />
           <button className="btn-primary py-1.5">Ask</button>
         </form>
       )}
+      {hd && (<>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Assigned to me" value={mine.mine} href="/tickets?assignee=me" tone="brand" />
         <Stat label="Unassigned" value={mine.unassigned} href="/tickets?assignee=unassigned" />
         <Stat label="No response yet" value={mine.unattended} href="/tickets?preset=unattended" tone="amber" />
         <Stat label="Overdue" value={mine.overdue} href="/tickets?preset=overdue" tone="red" />
       </div>
+      </>)}
 
-      <div className="mt-3 grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {crm && (
+      <div className={`grid grid-cols-2 gap-3 lg:grid-cols-4 ${hd ? "mt-3" : ""}`}>
         <Link href="/activities" className="card p-4 hover:border-brand-200">
           <div className={`text-2xl font-semibold tabular-nums ${Number(acts!.late) ? "text-red-600" : ""}`}>{Number(acts!.n)}</div>
           <div className="text-sm text-slate-500">Activities due today{Number(acts!.late) ? ` · ${acts!.late} overdue` : ""}</div>
@@ -51,7 +55,9 @@ export default async function Dashboard() {
           <div className="text-sm text-slate-500">My open pipeline · {Number(pipe!.n)} deals</div>
         </Link>
       </div>
+      )}
 
+      {hd && (<>
       <h2 className="mb-3 mt-8 text-sm font-semibold uppercase tracking-wide text-slate-500">Support teams</h2>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {teams.map((t) => (
@@ -99,6 +105,7 @@ export default async function Dashboard() {
           </Link>
         ))}
       </div>
+      </>)}
     </div>
   );
 }

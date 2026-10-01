@@ -21,7 +21,7 @@ export function TicketProps({ t, teams, users, customers }: { t: T; teams: Opt[]
       </div>
       <Field label="Stage">
         <select name="stage" defaultValue={t.stage} onChange={auto} className="input">
-          {Object.entries(STAGE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+          {Object.entries(STAGE_META).filter(([k]) => k !== "closed" || t.stage === "closed").map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
         </select>
       </Field>
       <Field label="Priority">
@@ -35,7 +35,7 @@ export function TicketProps({ t, teams, users, customers }: { t: T; teams: Opt[]
           {users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
         </select>
       </Field>
-      <Field label="Team">
+      <Field label="Zone">
         <select name="teamId" defaultValue={t.teamId} onChange={auto} className="input">
           {teams.map((x) => <option key={x.id} value={x.id}>{x.location ?? x.name}</option>)}
         </select>

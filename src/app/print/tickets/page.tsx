@@ -9,7 +9,7 @@ export const metadata = { title: "Tickets report" };
 export default async function PrintTickets({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const me = await requireUser();
   const sp = await searchParams;
-  const rows = await listTickets({ ...sp, stage: sp.stage ?? "open" }, me.id, 2000);
+  const rows = await listTickets({ ...sp, stage: sp.stage ?? "open" }, me, 2000);
   const done = rows.filter((r) => r.tatMinutes != null);
   const avg = done.length ? done.reduce((a, r) => a + r.tatMinutes!, 0) / done.length : null;
   return (

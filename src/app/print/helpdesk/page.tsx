@@ -6,16 +6,16 @@ import { fmtTat } from "@/lib/format";
 export const metadata = { title: "Helpdesk report" };
 
 export default async function PrintHelpdesk({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireUser();
+  const me = await requireUser();
   const sp = await searchParams;
-  const rows = await helpdeskRows(sp);
+  const rows = await helpdeskRows(sp, me);
   const s = summary(rows);
   const period = sp.from || sp.to ? `${sp.from ?? "…"} → ${sp.to ?? "today"}` : sp.days === "all" ? "All time" : `Last ${sp.days ?? 90} days`;
   const sections = [["type", "By type of complaint", "Type"], ["zone", "By zone", "Zone"], ["geo", "By geography", "City / state"], ["employee", "By employee (tickets solved)", "Employee"], ["plant", "By plant (top 20)", "Plant"]] as const;
   return (
     <PrintShell title="Helpdesk report" subtitle={period}>
       <div className="mb-4 grid grid-cols-5 gap-2 text-center">
-        {[["Total", s.total], ["Open", s.open], ["Closed", s.closed], ["Avg TAT", fmtTat(s.avgTat)], ["Rating", s.csat != null ? `${s.csat.toFixed(1)}/5` : "—"]].map(([k, v]) => (
+        {[["Total", s.total], ["Open", s.open], ["Done", s.closed], ["Avg TAT", fmtTat(s.avgTat)], ["Rating", s.csat != null ? `${s.csat.toFixed(1)}/5` : "—"]].map(([k, v]) => (
           <div key={k} className="rounded border border-slate-200 p-2"><div className="text-[10px] text-slate-500">{k}</div><div className="text-base font-bold">{v}</div></div>
         ))}
       </div>

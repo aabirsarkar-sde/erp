@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { requireDept } from "@/lib/access";
 import { listTickets, lookups, type TicketFilters as F, type TicketRow } from "@/lib/queries";
 import { TicketFilters } from "@/components/ticket-filters";
 import { PageHeader, StageBadge, PriorityFlag, Avatar, Empty, LinkButton } from "@/components/ui";
@@ -12,10 +13,11 @@ export const metadata = { title: "Tickets" };
 
 export default async function TicketsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const me = await requireUser();
+  requireDept(me, "hd");
   const sp = await searchParams;
   const board = sp.view === "board";
   const f: F = { ...sp, stage: board && !sp.stage ? "all" : sp.stage };
-  const [rows, lk] = await Promise.all([listTickets(f, me.id), lookups()]);
+  const [rows, lk] = await Promise.all([listTickets(f, me), lookups()]);
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -112,8 +114,8 @@ function List({ rows }: { rows: TicketRow[] }) {
 function Board({ rows }: { rows: TicketRow[] }) {
   return (
     <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-4 sm:mx-0 sm:px-0">
-      {STAGES.map((s) => {
-        const col = rows.filter((r) => r.stage === s);
+      {(["new", "in_progress", "waiting", "resolved"] as const).map((s) => {
+        const col = rows.filter((r) => r.stage === s || (s === "resolved" && r.stage === "closed"));
         return (
           <div key={s} className="w-72 shrink-0 snap-start rounded-xl bg-slate-100/80 p-2">
             <div className="flex items-center justify-between px-2 py-1.5">

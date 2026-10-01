@@ -28,3 +28,4 @@ export const IconChat = base(<path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0
 export const IconFolder = base(<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />);
 export const IconTrend = base(<><path d="M3 17l6-6 4 4 8-8" /><path d="M15 7h6v6" /></>);
 export const IconFactory = base(<><path d="M3 21V10l6 4V10l6 4V6l6 3v12z" /><path d="M7 17h2M13 17h2M17 17h2" /></>);
+export const IconInbox = base(<><path d="M22 12h-6l-2 3h-4l-2-3H2" /><path d="M5.5 5h13L22 12v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6z" /></>);

@@ -74,7 +74,7 @@ export function TicketFilters({ teams, users }: { teams: Opt[]; users: Opt[] }) 
         <select className={sel} value={sp.get("stage") ?? (view === "board" ? "all" : "open")} onChange={(e) => set("stage", e.target.value === (view === "board" ? "all" : "open") ? "" : e.target.value)}>
           <option value="open">Open</option>
           <option value="all">All stages</option>
-          {Object.entries(STAGE_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
+          {Object.entries(STAGE_META).filter(([k]) => k !== "closed").map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
         </select>
         <select className={sel} value={sp.get("assignee") ?? ""} onChange={(e) => set("assignee", e.target.value)}>
           <option value="">Anyone</option>

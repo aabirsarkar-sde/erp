@@ -1,14 +1,14 @@
 "use client";
 import { useTransition, useState } from "react";
 import { updateLead } from "@/app/actions/crm";
-import { LEAD_SOURCES } from "@/lib/crm";
+import { LEAD_SOURCES, PROPOSAL_META } from "@/lib/crm";
 import { fmtDateInput } from "@/lib/format";
 import { Field } from "./ui";
 
 type Opt = { id: number; name: string };
 type L = {
   id: number; customerId: number | null; contactName: string | null; email: string | null; phone: string | null; city: string | null; capacity: string | null;
-  source: string | null; expectedRevenue: number; probability: number; priority: number; tags: string | null; description: string | null; ownerId: number | null; expectedCloseAt: Date | null;
+  source: string | null; product: string | null; proposalStatus: string; expectedRevenue: number; probability: number; priority: number; tags: string | null; description: string | null; ownerId: number | null; expectedCloseAt: Date | null;
 };
 
 export function LeadDetails({ l, users, customers }: { l: L; users: Opt[]; customers: Opt[] }) {
@@ -36,6 +36,10 @@ export function LeadDetails({ l, users, customers }: { l: L; users: Opt[]; custo
           ))}
         </div>
       </div>
+      <Field label="Product / service"><input name="product" defaultValue={l.product ?? ""} onBlur={onBlur} className="input" /></Field>
+      <Field label="Proposal status">
+        <select name="proposalStatus" defaultValue={l.proposalStatus} onChange={onChange} className="input">{Object.entries(PROPOSAL_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}</select>
+      </Field>
       <Field label="Salesperson">
         <select name="ownerId" defaultValue={l.ownerId ?? ""} onChange={onChange} className="input"><option value="">—</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
       </Field>
@@ -56,7 +60,7 @@ export function LeadDetails({ l, users, customers }: { l: L; users: Opt[]; custo
         <select name="source" defaultValue={l.source ?? ""} onChange={onChange} className="input"><option value="">—</option>{LEAD_SOURCES.map((s) => <option key={s}>{s}</option>)}</select>
       </Field>
       <Field label="Tags"><input name="tags" defaultValue={l.tags ?? ""} onBlur={onBlur} className="input" placeholder="comma separated" /></Field>
-      <Field label="Notes"><textarea name="description" rows={4} defaultValue={l.description ?? ""} onBlur={onBlur} className="input" /></Field>
+      <Field label="Inquiry details"><textarea name="description" rows={4} defaultValue={l.description ?? ""} onBlur={onBlur} className="input" /></Field>
     </form>
   );
 }

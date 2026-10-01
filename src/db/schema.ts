@@ -11,6 +11,10 @@ export const users = sqliteTable("users", {
   phone: text("phone"),
   passwordHash: text("password_hash").notNull(),
   role: text("role", { enum: ["admin", "manager", "agent"] }).notNull().default("agent"),
+  // department access. CRM: none | own (own + followed/assigned opportunities) | all. Helpdesk: none | zone (own zones + assigned/followed) | all
+  crmAccess: text("crm_access", { enum: ["none", "own", "all"] }).notNull().default("none"),
+  hdAccess: text("hd_access", { enum: ["none", "zone", "all"] }).notNull().default("zone"),
+  title: text("title"), // e.g. Zonal Manager — Dahej
   active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: createdAt(),
 });

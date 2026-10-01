@@ -28,3 +28,14 @@ export const tagList = (t: string | null) => (t ? t.split(",").map((x) => x.trim
 
 // client-safe copy (avoid importing the db schema into browser bundles)
 export const ACTIVITY_TYPE_LIST = ["call", "meeting", "visit", "email", "todo"] as const;
+
+export const PROPOSAL_META: Record<string, { label: string; cls: string }> = {
+  not_started: { label: "Not started", cls: "bg-slate-100 text-slate-600" },
+  preparing: { label: "Preparing", cls: "bg-amber-50 text-amber-800" },
+  submitted: { label: "Submitted", cls: "bg-sky-50 text-sky-700" },
+  revised: { label: "Revised & resubmitted", cls: "bg-indigo-50 text-indigo-700" },
+  under_negotiation: { label: "Under negotiation", cls: "bg-violet-50 text-violet-700" },
+  accepted: { label: "Accepted", cls: "bg-emerald-50 text-emerald-700" },
+  rejected: { label: "Rejected", cls: "bg-red-50 text-red-700" },
+};
+export const PROPOSAL_LIST = Object.keys(PROPOSAL_META);

@@ -36,7 +36,9 @@ export async function createUser(_p: { error?: string; ok?: string } | undefined
   if (!name || !email || password.length < 6) return { error: "Name, email and a 6+ character password are required." };
   const exists = await db.query.users.findFirst({ where: eq(users.email, email) });
   if (exists) return { error: "A user with this email already exists." };
-  await db.insert(users).values({ name, email, role, phone: s(fd, "phone") || null, passwordHash: bcrypt.hashSync(password, 10) });
+  const [u] = await db.insert(users).values({ name, email, role, phone: s(fd, "phone") || null, passwordHash: bcrypt.hashSync(password, 10), crmAccess: crmOf(fd), hdAccess: hdOf(fd), title: s(fd, "title") || null }).returning();
+  const zones = fd.getAll("zones").map(Number).filter(Boolean);
+  if (zones.length) await db.insert(teamMembers).values(zones.map((teamId) => ({ teamId, userId: u!.id }))).onConflictDoNothing();
   done();
   return { ok: `${name} added.` };
 }
@@ -49,6 +51,10 @@ export async function updateUser(id: number, fd: FormData) {
   await db
     .update(users)
     .set({
+      // a field the form doesn't show (other product's access) is left untouched
+      ...(fd.has("crmAccess") || id === me.id ? { crmAccess: id === me.id ? "all" : crmOf(fd) } : {}),
+      ...(fd.has("hdAccess") || id === me.id ? { hdAccess: id === me.id ? "all" : hdOf(fd) } : {}),
+      title: s(fd, "title") || null,
       role: id === me.id ? "admin" : role,
       active: id === me.id ? true : active,
       ...(password.length >= 6 ? { passwordHash: bcrypt.hashSync(password, 10) } : {}),
@@ -102,3 +108,6 @@ export async function deleteCanned(id: number) {
   await db.delete(cannedResponses).where(eq(cannedResponses.id, id));
   done();
 }
+
+const crmOf = (fd: FormData) => (["none", "own", "all"].includes(String(fd.get("crmAccess"))) ? String(fd.get("crmAccess")) : "none") as "none" | "own" | "all";
+const hdOf = (fd: FormData) => (["none", "zone", "all"].includes(String(fd.get("hdAccess"))) ? String(fd.get("hdAccess")) : "none") as "none" | "zone" | "all";

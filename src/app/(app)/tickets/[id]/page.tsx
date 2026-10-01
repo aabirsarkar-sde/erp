@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db, tickets, messages, users, cannedResponses } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { assertTicket } from "@/lib/access";
 import { lookups } from "@/lib/queries";
 import { getSla } from "@/lib/sla";
 import { responseSla, TONE_CLS } from "@/lib/sla-status";
@@ -27,6 +28,8 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
   const view = (await searchParams).view === "mail" ? "mail" : "all";
   const me = await requireUser();
   const id = Number((await params).id);
+  if (!Number.isFinite(id)) notFound();
+  await assertTicket(me, id);
   if (!Number.isFinite(id)) notFound();
   const [t, lk] = await Promise.all([
     db.query.tickets.findFirst({

@@ -27,3 +27,14 @@ body { @apply bg-slate-50 text-slate-900 antialiased; }
 @utility btn-ghost { @apply btn text-slate-600 hover:bg-slate-100; }
 @utility card { @apply rounded-xl border border-slate-200 bg-white shadow-xs; }
 @utility label { @apply mb-1 block text-xs font-medium text-slate-600; }
+
+/* Sales CRM edition gets its own colour so the two apps are never confused */
+html[data-edition="crm"] {
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe6fe;
+  --color-brand-200: #bcd0fd;
+  --color-brand-500: #3b6fe0;
+  --color-brand-600: #2752c4;
+  --color-brand-700: #1f429e;
+  --color-brand-900: #172c62;
+}

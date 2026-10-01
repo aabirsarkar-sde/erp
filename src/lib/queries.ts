@@ -1,8 +1,11 @@
 import "server-only";
 import { and, asc, desc, eq, inArray, isNull, like, lt, or, sql, gte, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
-import { db, tickets, customers, users, teams, plants, STAGES, type Stage } from "@/db";
+import { db, tickets, customers, users, teams, plants, teamMembers, STAGES, type Stage } from "@/db";
 import { OPEN_STAGES } from "./constants";
+import { ticketScope } from "./access";
+import type { CurrentUser } from "./auth";
+type Me = CurrentUser;
 
 export type TicketFilters = {
   q?: string;
@@ -21,10 +24,14 @@ export type TicketFilters = {
 
 const openCond = inArray(tickets.stage, OPEN_STAGES);
 
-export function ticketWhere(f: TicketFilters, meId: number) {
+export function ticketWhere(f: TicketFilters, me: Me) {
+  const meId = me.id;
   const c: SQL[] = [];
+  const scope = ticketScope(me);
+  if (scope) c.push(scope);
   const stage = f.stage || "open";
   if (stage === "open") c.push(openCond);
+  else if (stage === "resolved") c.push(inArray(tickets.stage, ["resolved", "closed"])); // "Done" includes archived
   else if ((STAGES as readonly string[]).includes(stage)) c.push(eq(tickets.stage, stage as Stage));
   if (f.team) c.push(eq(tickets.teamId, Number(f.team)));
   if (f.plant) c.push(eq(tickets.plantId, Number(f.plant)));
@@ -52,7 +59,7 @@ export function ticketWhere(f: TicketFilters, meId: number) {
 
 const assignee = alias(users, "assignee");
 
-export async function listTickets(f: TicketFilters, meId: number, limit = 200) {
+export async function listTickets(f: TicketFilters, me: Me, limit = 200) {
   const order =
     f.sort === "priority" ? [desc(tickets.priority), desc(tickets.createdAt)]
     : f.sort === "updated" ? [desc(tickets.updatedAt)]
@@ -88,13 +95,13 @@ export async function listTickets(f: TicketFilters, meId: number, limit = 200) {
     .leftJoin(customers, eq(customers.id, tickets.customerId))
     .leftJoin(teams, eq(teams.id, tickets.teamId))
     .leftJoin(assignee, eq(assignee.id, tickets.assigneeId))
-    .where(ticketWhere(f, meId))
+    .where(ticketWhere(f, me))
     .orderBy(...order)
     .limit(limit);
 }
 export type TicketRow = Awaited<ReturnType<typeof listTickets>>[number];
 
-export async function teamStats() {
+export async function teamStats(me: Me) {
   const open = sql`${tickets.stage} in ('new','in_progress','waiting')`;
   const rows = await db
     .select({
@@ -107,14 +114,15 @@ export async function teamStats() {
       high: sql<number>`coalesce(sum(case when ${open} and ${tickets.priority} >= 2 then 1 else 0 end),0)`,
     })
     .from(teams)
-    .leftJoin(tickets, eq(tickets.teamId, teams.id))
-    .where(eq(teams.active, true))
+    .leftJoin(tickets, and(eq(tickets.teamId, teams.id), ticketScope(me)))
+    .where(and(eq(teams.active, true), me.hdAccess === "all" ? undefined : inArray(teams.id, db.select({ id: teamMembers.teamId }).from(teamMembers).where(eq(teamMembers.userId, me.id)))))
     .groupBy(teams.id)
     .orderBy(asc(teams.id));
   return rows.map((r) => ({ ...r, open: Number(r.open), unassigned: Number(r.unassigned), unattended: Number(r.unattended), high: Number(r.high) }));
 }
 
-export async function myStats(meId: number) {
+export async function myStats(me: Me) {
+  const meId = me.id;
   const open = sql`${tickets.stage} in ('new','in_progress','waiting')`;
   const [r] = await db
     .select({
@@ -123,7 +131,8 @@ export async function myStats(meId: number) {
       unattended: sql<number>`coalesce(sum(case when ${open} and ${tickets.firstResponseAt} is null then 1 else 0 end),0)`,
       overdue: sql<number>`coalesce(sum(case when ${open} and ${tickets.dueAt} < ${Math.floor(Date.now() / 1000)} then 1 else 0 end),0)`,
     })
-    .from(tickets);
+    .from(tickets)
+    .where(ticketScope(me));
   return { mine: Number(r!.mine), unassigned: Number(r!.unassigned), unattended: Number(r!.unattended), overdue: Number(r!.overdue) };
 }
 
@@ -135,3 +144,4 @@ export async function lookups() {
   ]);
   return { teams: t, users: u, customers: c };
 }
+

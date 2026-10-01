@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { gte } from "drizzle-orm";
+import { and, gte } from "drizzle-orm";
 import { db, tickets } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { ticketScope, requireDept } from "@/lib/access";
 import { lookups } from "@/lib/queries";
 import { getSla } from "@/lib/sla";
 import { PageHeader } from "@/components/ui";
@@ -36,10 +37,11 @@ function metrics(ts: T[], sla: { response: number[]; resolution: number[] }) {
 }
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ days?: string }> }) {
-  await requireUser();
+  const me = await requireUser();
+  requireDept(me, "hd");
   const days = [7, 30, 90, 365].includes(Number((await searchParams).days)) ? Number((await searchParams).days) : 30;
   const since = new Date(Date.now() - days * 24 * H);
-  const [ts, lk, sla] = await Promise.all([db.select().from(tickets).where(gte(tickets.createdAt, since)), lookups(), getSla()]);
+  const [ts, lk, sla] = await Promise.all([db.select().from(tickets).where(and(gte(tickets.createdAt, since), ticketScope(me))), lookups(), getSla()]);
   const all = metrics(ts, sla);
   const byTeam = lk.teams.map((t) => ({ name: t.location ?? t.name, id: t.id, ...metrics(ts.filter((x) => x.teamId === t.id), sla) }));
   const byAgent = lk.users

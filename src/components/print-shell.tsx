@@ -11,7 +11,7 @@ export async function PrintShell({ title, subtitle, children, landscape }: { tit
         <header className="mb-4 flex items-end justify-between border-b-2 border-brand-600 pb-3">
           <div className="flex items-center gap-2.5">
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/icon.svg" alt="" className="size-9" />
+            <img src="/brand-icon.svg" alt="" className="size-9" />
             <div><div className="text-base font-bold text-slate-900">{co.name}</div><div className="text-slate-500">{co.address}</div></div>
           </div>
           <div className="text-right">

@@ -10,7 +10,8 @@ const KINDS: { k: ImportKind; label: string; hint: string }[] = [
   { k: "tickets", label: "Helpdesk tickets", hint: "Odoo → Helpdesk → Tickets (list view) → select all → Export. Tick Subject, Customer, Helpdesk Team, Stage, Priority, Assigned to, Description, Created on." },
 ];
 
-export function Importer() {
+export function Importer({ crm = true, hd = true }: { crm?: boolean; hd?: boolean }) {
+  const kinds = KINDS.filter((k) => (k.k !== "leads" || crm) && (!["tickets", "plants"].includes(k.k) || hd));
   const [kind, setKind] = useState<ImportKind>("contacts");
   const [headers, setHeaders] = useState<string[]>([]);
   const [rows, setRows] = useState<string[][]>([]);
@@ -52,7 +53,7 @@ export function Importer() {
     <div className="space-y-5">
       <div className="card space-y-3 p-5">
         <div className="flex flex-wrap gap-1 rounded-lg bg-slate-100 p-1 sm:w-fit">
-          {KINDS.map((k) => <button key={k.k} onClick={() => switchKind(k.k)} className={`rounded-md px-3 py-1.5 text-sm font-medium ${kind === k.k ? "bg-white shadow-sm" : "text-slate-500"}`}>{k.label}</button>)}
+          {kinds.map((k) => <button key={k.k} onClick={() => switchKind(k.k)} className={`rounded-md px-3 py-1.5 text-sm font-medium ${kind === k.k ? "bg-white shadow-sm" : "text-slate-500"}`}>{k.label}</button>)}
         </div>
         <p className="text-xs text-slate-500">{KINDS.find((k) => k.k === kind)!.hint}</p>
         <label className="flex cursor-pointer flex-col items-center rounded-lg border-2 border-dashed border-slate-300 px-4 py-6 text-sm text-slate-500 hover:border-brand-400">

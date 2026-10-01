@@ -1,11 +1,13 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { db, documents } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { readFileByKey } from "@/lib/storage";
+import { documentScope } from "@/lib/access";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await getCurrentUser())) return new Response("Unauthorized", { status: 401 });
-  const d = await db.query.documents.findFirst({ where: eq(documents.id, Number((await params).id)) });
+  const me = await getCurrentUser();
+  if (!me) return new Response("Unauthorized", { status: 401 });
+  const [d] = await db.select().from(documents).where(and(eq(documents.id, Number((await params).id)), documentScope(me))).limit(1);
   if (!d) return new Response("Not found", { status: 404 });
   const data = await readFileByKey(d.storageKey);
   const body = data instanceof Response ? data.body : new Uint8Array(data);

@@ -5,6 +5,7 @@ import { cache } from "react";
 import { eq } from "drizzle-orm";
 import { db, users } from "@/db";
 import { SESSION_COOKIE, verifySession } from "./session";
+import { editionHasCrm, editionHasHd } from "./edition";
 
 export const getCurrentUser = cache(async () => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
@@ -13,7 +14,8 @@ export const getCurrentUser = cache(async () => {
   const u = await db.query.users.findFirst({ where: eq(users.id, s.uid) });
   if (!u || !u.active) return null;
   const { passwordHash: _ph, ...safe } = u;
-  return safe;
+  // this deployment is one product: switch off the other department's access entirely
+  return { ...safe, crmAccess: editionHasCrm ? safe.crmAccess : ("none" as const), hdAccess: editionHasHd ? safe.hdAccess : ("none" as const) };
 });
 
 export async function requireUser() {

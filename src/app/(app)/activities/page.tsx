@@ -2,6 +2,8 @@ import Link from "next/link";
 import { and, asc, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import { db, activities, ACTIVITY_TYPES } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { requireDept } from "@/lib/access";
+import { activityScope } from "@/lib/access";
 import { lookups } from "@/lib/queries";
 import { PageHeader, Empty, Avatar } from "@/components/ui";
 import { ActivityItem } from "@/components/activity-item";
@@ -16,9 +18,10 @@ export const metadata = { title: "Activities" };
 
 export default async function ActivitiesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const me = await requireUser();
+  if (me.crmAccess === "none" && me.hdAccess === "none") requireDept(me, "crm");
   const sp = await searchParams;
   const tab = sp.tab === "report" ? "report" : "todo";
-  const who = sp.user === "all" ? undefined : sp.user ? Number(sp.user) : me.id;
+  const who = sp.user === "all" ? undefined : sp.user ? Number(sp.user) || me.id : me.id;
   const lk = await lookups();
   const userOpts: [string, string][] = [["me", "Me"], ["all", "Everyone"], ...lk.users.filter((u) => u.id !== me.id).map((u) => [String(u.id), u.name] as [string, string])];
   const withRel = { lead: { columns: { id: true, title: true } }, customer: { columns: { name: true } }, user: { columns: { name: true } } } as const;
@@ -34,7 +37,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
   if (tab === "report") {
     const days = Number(sp.days) || 30;
     const rows = await db.query.activities.findMany({
-      where: and(isNotNull(activities.doneAt), gte(activities.doneAt, new Date(Date.now() - days * 864e5)), who ? eq(activities.userId, who) : undefined, sp.type ? eq(activities.type, sp.type as (typeof ACTIVITY_TYPES)[number]) : undefined),
+      where: and(activityScope(me), isNotNull(activities.doneAt), gte(activities.doneAt, new Date(Date.now() - days * 864e5)), who ? eq(activities.userId, who) : undefined, sp.type ? eq(activities.type, sp.type as (typeof ACTIVITY_TYPES)[number]) : undefined),
       orderBy: desc(activities.doneAt),
       with: withRel,
       limit: 500,
@@ -79,7 +82,7 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
     );
   }
 
-  const open = await db.query.activities.findMany({ where: and(isNull(activities.doneAt), who ? eq(activities.userId, who) : undefined), orderBy: asc(activities.dueAt), with: withRel, limit: 300 });
+  const open = await db.query.activities.findMany({ where: and(activityScope(me), isNull(activities.doneAt), who ? eq(activities.userId, who) : undefined), orderBy: asc(activities.dueAt), with: withRel, limit: 300 });
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const tomorrow = new Date(today.getTime() + 864e5);
   const groups = [

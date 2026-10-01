@@ -2,11 +2,13 @@ import { eq } from "drizzle-orm";
 import { db, attachments } from "@/db";
 import { getCurrentUser } from "@/lib/auth";
 import { readFileByKey } from "@/lib/storage";
+import { canSeeTicket } from "@/lib/access";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  if (!(await getCurrentUser())) return new Response("Unauthorized", { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return new Response("Unauthorized", { status: 401 });
   const a = await db.query.attachments.findFirst({ where: eq(attachments.id, Number((await params).id)) });
-  if (!a) return new Response("Not found", { status: 404 });
+  if (!a || !(await canSeeTicket(me, a.ticketId))) return new Response("Not found", { status: 404 });
   const data = await readFileByKey(a.storageKey);
   const body = data instanceof Response ? data.body : new Uint8Array(data);
   const download = new URL(req.url).searchParams.has("download");

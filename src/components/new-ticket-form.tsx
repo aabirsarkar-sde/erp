@@ -53,58 +53,70 @@ export function NewTicketForm({ teams, users, customers, plants, defaultDate, de
 
   const step = (n: number, label: string) => <span className="mr-2 inline-flex size-5 items-center justify-center rounded-full bg-brand-600 text-[11px] font-bold text-white">{n}</span>;
 
+  const [zone, setZone] = useState<string>(plant?.teamId ? String(plant.teamId) : teams.length === 1 ? String(teams[0]!.id) : "");
+  const zonePlants = useMemo(() => (zone ? shown.filter((p) => String(p.teamId) === zone) : shown), [shown, zone]);
+  const pickPlant = (p: PlantOpt) => { setPlantId(String(p.id)); if (p.teamId) setZone(String(p.teamId)); };
+  const req = <b className="text-red-500">*</b>;
+
   return (
     <form ref={formRef} onSubmit={onSubmit} className="space-y-5">
       <div className="card space-y-5 p-5">
-        <div className="grid gap-4 sm:grid-cols-[12rem_1fr]">
+        <div className="grid gap-4 sm:grid-cols-3">
           <Field label="Complaint date *">
             <input name="reportedAt" type="date" required defaultValue={defaultDate} className="input" />
           </Field>
-          <div>
-            <span className="label">{step(1, "")}Plant number *</span>
-            {!noPlant ? (
-              <>
-                <input type="hidden" name="plantId" value={plantId} />
-                {plant ? (
-                  <div className="flex items-center justify-between gap-3 rounded-lg border border-brand-200 bg-brand-50/50 px-3 py-2">
-                    <div className="min-w-0 text-sm">
-                      <div className="font-semibold">{plant.plantNo} · {plant.name}</div>
-                      <div className="truncate text-xs text-slate-600">{plant.customerName ?? "—"} · Zone: {plant.zone ?? "—"} · {[plant.city, plant.state].filter(Boolean).join(", ")}</div>
-                    </div>
-                    <button type="button" onClick={() => setPlantId("")} className="btn-ghost px-2 py-1 text-xs">Change</button>
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-slate-300">
-                    <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type plant no., plant or customer name, city…" className="w-full rounded-t-lg border-b border-slate-200 px-3 py-2 text-sm outline-none" autoFocus />
-                    <ul className="max-h-48 overflow-y-auto">
-                      {shown.map((p) => (
-                        <li key={p.id}>
-                          <button type="button" onClick={() => setPlantId(String(p.id))} className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm hover:bg-brand-50">
-                            <span className="font-mono text-xs font-semibold text-brand-700">{p.plantNo}</span>
-                            <span className="truncate">{p.name}</span>
-                            <span className="ml-auto shrink-0 text-xs text-slate-400">{p.zone}</span>
-                          </button>
-                        </li>
-                      ))}
-                      {shown.length === 0 && <li className="px-3 py-2 text-xs text-slate-500">No plant matches.</li>}
-                    </ul>
-                  </div>
-                )}
-                <button type="button" onClick={() => { setNoPlant(true); setPlantId(""); }} className="mt-1 text-xs text-slate-500 underline">Plant not listed?</button>
-              </>
-            ) : (
-              <div className="grid gap-2 sm:grid-cols-2">
-                <select name="customerId" defaultValue={defaultCustomer ?? ""} className="input"><option value="">— Customer —</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-                <select name="teamId" className="input"><option value="">— Zone / team —</option>{teams.map((t) => <option key={t.id} value={t.id}>{t.location ?? t.name}</option>)}</select>
-                <input name="site" placeholder="Plant / site description" className="input sm:col-span-2" />
-                {plants.length > 0 && <button type="button" onClick={() => setNoPlant(false)} className="text-left text-xs text-slate-500 underline">Pick from plant list</button>}
-              </div>
-            )}
-          </div>
+          <label className="block sm:col-span-2">
+            <span className="label">{step(1, "")}Zone name {req}</span>
+            <select name="teamId" required value={zone} onChange={(e) => { setZone(e.target.value); if (plant && String(plant.teamId) !== e.target.value) setPlantId(""); }} className="input">
+              <option value="">— Select zone —</option>
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.location ?? t.name}</option>)}
+            </select>
+          </label>
         </div>
 
         <div>
-          <span className="label">{step(2, "")}Type of complaint *</span>
+          <span className="label">{step(2, "")}Site name & plant serial number {req}</span>
+          {!noPlant ? (
+            <>
+              <input type="hidden" name="plantId" value={plantId} />
+              {plant ? (
+                <div className="grid gap-2 rounded-lg border border-brand-200 bg-brand-50/50 px-3 py-2 text-sm sm:grid-cols-[1fr_1fr_1fr_auto] sm:items-center">
+                  <div><div className="text-[11px] text-slate-500">Plant serial no.</div><div className="font-mono font-semibold">{plant.plantNo}</div></div>
+                  <div><div className="text-[11px] text-slate-500">Site name</div><div className="font-semibold">{plant.name}</div></div>
+                  <div className="min-w-0"><div className="text-[11px] text-slate-500">Company name</div><div className="truncate font-semibold">{plant.customerName ?? "—"}</div><div className="truncate text-xs text-slate-500">Zone: {plant.zone ?? "—"} · {[plant.city, plant.state].filter(Boolean).join(", ")}</div></div>
+                  <button type="button" onClick={() => setPlantId("")} className="btn-ghost px-2 py-1 text-xs">Change</button>
+                </div>
+              ) : (
+                <div className="rounded-lg border border-slate-300">
+                  <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type plant no., plant or customer name, city…" className="w-full rounded-t-lg border-b border-slate-200 px-3 py-2 text-sm outline-none" />
+                  <ul className="max-h-48 overflow-y-auto">
+                    {zonePlants.map((p) => (
+                      <li key={p.id}>
+                        <button type="button" onClick={() => pickPlant(p)} className="flex w-full items-baseline gap-2 px-3 py-1.5 text-left text-sm hover:bg-brand-50">
+                          <span className="font-mono text-xs font-semibold text-brand-700">{p.plantNo}</span>
+                          <span className="truncate">{p.name}</span>
+                          <span className="truncate text-xs text-slate-500">{p.customerName}</span>
+                          <span className="ml-auto shrink-0 text-xs text-slate-400">{p.zone}</span>
+                        </button>
+                      </li>
+                    ))}
+                    {zonePlants.length === 0 && <li className="px-3 py-2 text-xs text-slate-500">No plant matches{zone ? " in this zone" : ""}.</li>}
+                  </ul>
+                </div>
+              )}
+              <button type="button" onClick={() => { setNoPlant(true); setPlantId(""); }} className="mt-1 text-xs text-slate-500 underline">Plant not listed?</button>
+            </>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <input name="site" required placeholder="Site name *" className="input" />
+              <select name="customerId" required defaultValue={defaultCustomer ?? ""} className="input"><option value="">— Company name * —</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+              {plants.length > 0 && <button type="button" onClick={() => setNoPlant(false)} className="text-left text-xs text-slate-500 underline">Pick from plant list</button>}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <span className="label">{step(3, "")}Complaint category {req}</span>
           <input type="hidden" name="category" value={type} />
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
             {COMPLAINT_TYPES.map((t) => (
@@ -115,9 +127,29 @@ export function NewTicketForm({ teams, users, customers, plants, defaultDate, de
           </div>
         </div>
 
+        <div className="grid gap-4 sm:grid-cols-3">
+          <div>
+            <span className="label">{step(4, "")}Priority {req}</span>
+            <input type="hidden" name="priority" value={prio} />
+            <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-100 p-1">
+              {PRIORITIES.map((p) => (
+                <button key={p.value} type="button" onClick={() => setPrio(p.value)} className={`rounded-md py-1.5 text-xs font-medium ${prio === p.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}>{p.label}</button>
+              ))}
+            </div>
+          </div>
+          <label className="block">
+            <span className="label">{step(5, "")}Assigned to {req}</span>
+            <select name="assigneeId" required className="input" defaultValue=""><option value="">— Select engineer —</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
+          </label>
+          <label className="block">
+            <span className="label">{step(6, "")}Tags</span>
+            <input name="tags" className="input" placeholder="e.g. AMC, Warranty, Breakdown" />
+          </label>
+        </div>
+
         <div>
-          <span className="label">{step(3, "")}Narration *</span>
-          <textarea name="description" required minLength={5} rows={5} className="input" placeholder="Describe the problem: what happened, since when, readings/alarms, what has been tried…" />
+          <span className="label">{step(7, "")}Brief description {req}</span>
+          <textarea name="description" required minLength={5} rows={4} className="input" placeholder="What happened, since when, readings/alarms, what has been tried…" />
           {ai && (
             <div className="mt-2 flex flex-wrap items-center gap-3">
               <AiButton onClick={suggest} busy={triaging} className="py-1 text-xs">Suggest type & priority</AiButton>
@@ -126,35 +158,16 @@ export function NewTicketForm({ teams, users, customers, plants, defaultDate, de
             </div>
           )}
         </div>
-
-        <div>
-          <span className="label">{step(4, "")}Complaint made by *</span>
-          <div className="grid gap-2 sm:grid-cols-3">
-            <input name="complainantName" required placeholder="Name *" className="input" />
-            <input name="complainantPhone" type="tel" placeholder="Phone" className="input" />
-            <input name="complainantEmail" type="email" placeholder="Email (gets updates)" className="input" />
-          </div>
-        </div>
       </div>
 
       <details className="card p-5">
-        <summary className="cursor-pointer text-sm font-medium text-slate-700">More options — priority, assign, attachments</summary>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
-          <div>
-            <span className="label">Priority</span>
-            <input type="hidden" name="priority" value={prio} />
-            <div className="grid grid-cols-4 gap-1 rounded-lg bg-slate-100 p-1">
-              {PRIORITIES.map((p) => (
-                <button key={p.value} type="button" onClick={() => setPrio(p.value)} className={`rounded-md py-1.5 text-xs font-medium ${prio === p.value ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"}`}>{p.label}</button>
-              ))}
-            </div>
-          </div>
-          <Field label="Assign to">
-            <select name="assigneeId" className="input" defaultValue=""><option value="">Unassigned (zone team picks it up)</option>{users.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}</select>
-          </Field>
-          <Field label="Short title (optional)"><input name="subject" className="input" placeholder="Auto: “Mechanical — PLT-012 …”" /></Field>
-          <Field label="Tags"><input name="tags" className="input" placeholder="ROSERVE, AMC" /></Field>
-          <div className="sm:col-span-2"><span className="label">Photos / documents</span><FilePicker files={files} setFiles={setFiles} /></div>
+        <summary className="cursor-pointer text-sm font-medium text-slate-700">Reported by (customer contact), title & attachments — optional</summary>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <input name="complainantName" placeholder="Name of person complaining" className="input" />
+          <input name="complainantPhone" type="tel" placeholder="Phone" className="input" />
+          <input name="complainantEmail" type="email" placeholder="Email (gets updates)" className="input" />
+          <Field label="Short title" className="sm:col-span-3"><input name="subject" className="input" placeholder="Auto: “Mechanical — PLT-012 …”" /></Field>
+          <div className="sm:col-span-3"><span className="label">Photos / documents</span><FilePicker files={files} setFiles={setFiles} /></div>
         </div>
       </details>
 

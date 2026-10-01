@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { and, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db, events, eventAttendees, activities, tickets, plants } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { activityScope, ticketScope } from "@/lib/access";
 import { lookups } from "@/lib/queries";
 import { regenerateCalendarToken } from "@/app/actions/calendar";
 import { getOrCreateCalendarToken } from "@/lib/calendar";
@@ -24,7 +25,8 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 const COLORS = ["bg-sky-100 border-sky-400 text-sky-900", "bg-violet-100 border-violet-400 text-violet-900", "bg-amber-100 border-amber-400 text-amber-900", "bg-emerald-100 border-emerald-400 text-emerald-900", "bg-rose-100 border-rose-400 text-rose-900", "bg-teal-100 border-teal-400 text-teal-900"];
 
 type Ev = { id: number; title: string; startAt: Date; endAt: Date; allDay: boolean; location: string | null; ownerId: number | null };
-type Act = { id: number; type: keyof typeof ACTIVITY_META; summary: string; dueAt: Date | null; leadId: number | null };
+type Act = { id: number; type: keyof typeof ACTIVITY_META; summary: string; dueAt: Date | null; leadId: number | null; doneAt: Date | null; durationMin: number | null; location: string | null };
+const timed = (a: Act) => { if (!a.dueAt) return false; const p = localParts(a.dueAt); return p.h !== 0 || p.min !== 0; };
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const me = await requireUser();
@@ -34,7 +36,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const from = view === "week" ? startOfLocalWeek(anchor) : startOfLocalWeek(startOfLocalMonth(anchor));
   const days = view === "week" ? 7 : 42;
   const to = new Date(+from + days * DAY_MS);
-  const who = sp.who === "all" ? null : sp.who ? Number(sp.who) : me.id;
+  const canAll = me.crmAccess === "all" || me.hdAccess === "all" || me.role === "admin";
+  const who = !canAll ? me.id : sp.who === "all" ? null : sp.who ? Number(sp.who) || me.id : me.id;
 
   const lk = await lookups();
   const mine = who ? db.select({ id: eventAttendees.eventId }).from(eventAttendees).where(eq(eventAttendees.userId, who)) : null;
@@ -42,13 +45,15 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const tAt = sql<number>`coalesce(${tickets.reportedAt}, ${tickets.createdAt})`;
   const [evs, acts, token, tks] = await Promise.all([
     db.select().from(events).where(and(lt(events.startAt, to), gte(events.endAt, from), mine ? inArray(events.id, mine) : undefined)),
-    db.select().from(activities).where(and(isNull(activities.doneAt), gte(activities.dueAt, from), lt(activities.dueAt, to), who ? eq(activities.userId, who) : undefined)),
+    db.select().from(activities).where(and(activityScope(me), gte(activities.dueAt, from), lt(activities.dueAt, to), who ? eq(activities.userId, who) : undefined)),
     getOrCreateCalendarToken(me.id),
     db.select({ id: tickets.id, category: tickets.category, stage: tickets.stage, tat: tickets.tatMinutes, at: tAt, plantNo: plants.plantNo, subject: tickets.subject })
       .from(tickets).leftJoin(plants, eq(plants.id, tickets.plantId))
-      .where(and(gte(tAt, Math.floor(+from / 1000)), lt(tAt, Math.floor(+to / 1000)), who && sp.who ? eq(tickets.assigneeId, who) : undefined)),
+      .where(and(ticketScope(me), gte(tAt, Math.floor(+from / 1000)), lt(tAt, Math.floor(+to / 1000)), who && sp.who ? eq(tickets.assigneeId, who) : undefined)),
   ]);
   const showEvents = show !== "tickets", showTickets = show !== "events";
+  const hasCrm = me.crmAccess !== "none", hasHd = me.hdAccess !== "none";
+  const slotHref = (d: Date, h: number) => `${hasCrm ? "/calendar/activity" : "/calendar/new"}?start=${localDateKey(d)}T${String(h).padStart(2, "0")}:00`;
   type Tk = (typeof tks)[number];
   const tksOn = (d: Date) => (showTickets ? tks.filter((t) => localDateKey(Number(t.at) * 1000) === localDateKey(d)) : []);
   const TicketChip = ({ t }: { t: Tk }) => {
@@ -71,14 +76,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const feed = `${appUrl()}/api/calendar/${token}.ics`;
 
   const ActChip = ({ x }: { x: Act }) => (
-    <Link href={x.leadId ? `/crm/${x.leadId}` : "/activities"} className="block truncate rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-slate-200" title={x.summary}>
-      {ACTIVITY_META[x.type].emoji} {x.summary}
+    <Link href={`/activities/${x.id}`} className={`block truncate rounded px-1.5 py-0.5 text-[11px] hover:bg-slate-200 ${x.doneAt ? "bg-emerald-50 text-emerald-800 line-through decoration-emerald-400" : "bg-slate-100 text-slate-700"}`} title={x.summary}>
+      {x.doneAt ? "✓" : ACTIVITY_META[x.type].emoji} {timed(x) ? `${fmtTime(x.dueAt!)} ` : ""}{x.summary}
     </Link>
   );
 
   return (
     <div className="mx-auto max-w-7xl">
-      <PageHeader title="Calendar" subtitle={title} actions={<><LinkButton href="/calendar/new" variant="secondary"><IconPlus className="size-4" />Event</LinkButton><LinkButton href={`/tickets/new?date=${localDateKey(anchor)}`}><IconPlus className="size-4" />Complaint</LinkButton></>} />
+      <PageHeader title="Calendar" subtitle={title} actions={<><LinkButton href="/calendar/new" variant="secondary"><IconPlus className="size-4" />Event</LinkButton>{hasCrm && <LinkButton href={`/calendar/activity?start=${localDateKey(anchor)}T10:00`} variant={hasHd ? "secondary" : "primary"}><IconPlus className="size-4" />Activity / visit</LinkButton>}{hasHd && <LinkButton href={`/tickets/new?date=${localDateKey(anchor)}`}><IconPlus className="size-4" />Complaint</LinkButton>}</>} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5 text-sm">
           <Link href={nav(-step)} className="rounded-md px-2.5 py-1 hover:bg-slate-100">‹</Link>
@@ -90,8 +95,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
             <Link key={v} href={`/calendar?${new URLSearchParams({ ...(sp as Record<string, string>), view: v })}`} className={`rounded-md px-3 py-1 capitalize ${view === v ? "bg-slate-100 font-medium" : "text-slate-500"}`}>{v}</Link>
           ))}
         </div>
-        <ParamSelect name="show" fallback="all" options={[["all", "Complaints + meetings"], ["tickets", "Complaints only"], ["events", "Meetings & follow-ups only"]]} />
-        <ParamSelect name="who" fallback="me" options={[["me", "My calendar"], ["all", "Everyone"], ...lk.users.filter((u) => u.id !== me.id).map((u) => [String(u.id), u.name] as [string, string])]} />
+        <ParamSelect name="show" fallback="all" options={[["all", hasHd && hasCrm ? "Complaints + activities" : "Everything"], ...(hasHd ? [["tickets", "Complaints only"]] : []), ["events", "Meetings & activities only"]] as [string, string][]} />
+        {canAll && <ParamSelect name="who" fallback="me" options={[["me", "My calendar"], ["all", "Everyone"], ...lk.users.filter((u) => u.id !== me.id).map((u) => [String(u.id), u.name] as [string, string])]} />}
       </div>
 
       {view === "week" ? (
@@ -111,33 +116,37 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                 <div key={+d} className="group min-h-8 space-y-0.5 border-l border-slate-200 p-1">
                   {tksOn(d).map((t) => <TicketChip key={`t${t.id}`} t={t} />)}
                   {evsOn(d).filter((e) => e.allDay).map((e) => <Link key={e.id} href={`/calendar/${e.id}`} className={`block truncate rounded border-l-2 px-1.5 py-0.5 text-[11px] font-medium ${colorOf(e)}`}>{e.title}</Link>)}
-                  {actsOn(d).map((x) => <ActChip key={x.id} x={x} />)}
-                  <Link href={`/tickets/new?date=${localDateKey(d)}`} className="block rounded px-1.5 py-0.5 text-[11px] text-brand-700 opacity-0 hover:bg-brand-50 group-hover:opacity-100">+ complaint</Link>
+                  {actsOn(d).filter((x) => !timed(x)).map((x) => <ActChip key={x.id} x={x} />)}
+                  {hasHd && <Link href={`/tickets/new?date=${localDateKey(d)}`} className="block rounded px-1.5 py-0.5 text-[11px] text-brand-700 opacity-0 hover:bg-brand-50 group-hover:opacity-100">+ complaint</Link>}
                 </div>
               ))}
             </div>
             <div className="relative grid max-h-[62vh] grid-cols-[3.5rem_repeat(7,minmax(0,1fr))] overflow-y-auto">
               <div>{Array.from({ length: LAST_H - FIRST_H }, (_, i) => <div key={i} style={{ height: HOUR_PX }} className="pr-1 text-right text-[10px] text-slate-400">{((FIRST_H + i) % 12 || 12) + (FIRST_H + i < 12 ? "am" : "pm")}</div>)}</div>
               {dayList.map((d) => {
-                const dayEvs = evsOn(d).filter((e) => !e.allDay).sort((x, y) => +x.startAt - +y.startAt);
+                type Blk = { key: string; href: string; title: string; sub: string; startAt: Date; endAt: Date; cls: string };
+                const dayEvs: Blk[] = [
+                  ...evsOn(d).filter((e) => !e.allDay).map((e) => ({ key: `e${e.id}`, href: `/calendar/${e.id}`, title: e.title, sub: `${fmtTime(e.startAt)}${e.location ? ` · ${e.location}` : ""}`, startAt: e.startAt, endAt: e.endAt, cls: colorOf(e) })),
+                  ...actsOn(d).filter(timed).map((x) => ({ key: `a${x.id}`, href: `/activities/${x.id}`, title: `${x.doneAt ? "✓" : ACTIVITY_META[x.type].emoji} ${x.summary}`, sub: `${fmtTime(x.dueAt!)}${x.location ? ` · ${x.location}` : ""}`, startAt: x.dueAt!, endAt: new Date(+x.dueAt! + (x.durationMin || 30) * 60e3), cls: x.doneAt ? "bg-emerald-50 border-emerald-500 text-emerald-900" : "bg-white border-slate-500 text-slate-800 ring-1 ring-slate-200" })),
+                ].sort((x, y) => +x.startAt - +y.startAt);
                 // simple lane assignment for overlaps
-                const lanes: number[] = []; const laneOf = new Map<number, number>();
-                for (const e of dayEvs) { let li = lanes.findIndex((end) => end <= +e.startAt); if (li < 0) { li = lanes.length; lanes.push(0); } lanes[li] = +e.endAt; laneOf.set(e.id, li); }
+                const lanes: number[] = []; const laneOf = new Map<string, number>();
+                for (const e of dayEvs) { let li = lanes.findIndex((end) => end <= +e.startAt); if (li < 0) { li = lanes.length; lanes.push(0); } lanes[li] = +e.endAt; laneOf.set(e.key, li); }
                 const n = Math.max(1, lanes.length);
                 return (
                   <div key={+d} className={`relative border-l border-slate-200 ${localDateKey(d) === todayKey ? "bg-brand-50/30" : ""}`}>
                     {Array.from({ length: LAST_H - FIRST_H }, (_, i) => (
-                      <Link key={i} href={`/calendar/new?start=${localDateKey(d)}T${String(FIRST_H + i).padStart(2, "0")}:00`} style={{ height: HOUR_PX }} className="block border-b border-slate-100 hover:bg-brand-50/60" aria-label="New event" />
+                      <Link key={i} href={slotHref(d, FIRST_H + i)} style={{ height: HOUR_PX }} className="block border-b border-slate-100 hover:bg-brand-50/60" aria-label={hasCrm ? "New activity" : "New event"} />
                     ))}
                     {dayEvs.map((e) => {
                       const sh = Math.max(FIRST_H, (+e.startAt - +d) / 3600e3), eh = Math.min(LAST_H, (+e.endAt - +d) / 3600e3);
                       if (eh <= FIRST_H || sh >= LAST_H) return null;
-                      const li = laneOf.get(e.id)!;
+                      const li = laneOf.get(e.key)!;
                       return (
-                        <Link key={e.id} href={`/calendar/${e.id}`} className={`absolute overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-[11px] leading-tight shadow-xs hover:z-10 hover:shadow ${colorOf(e)}`}
+                        <Link key={e.key} href={e.href} className={`absolute overflow-hidden rounded border-l-[3px] px-1.5 py-0.5 text-[11px] leading-tight shadow-xs hover:z-10 hover:shadow ${e.cls}`}
                           style={{ top: (sh - FIRST_H) * HOUR_PX + 1, height: Math.max(20, (eh - sh) * HOUR_PX - 2), left: `calc(${(li / n) * 100}% + 2px)`, width: `calc(${100 / n}% - 4px)` }}>
                           <div className="truncate font-semibold">{e.title}</div>
-                          <div className="truncate opacity-75">{fmtTime(e.startAt)}{e.location ? ` · ${e.location}` : ""}</div>
+                          <div className="truncate opacity-75">{e.sub}</div>
                         </Link>
                       );
                     })}
@@ -154,7 +163,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                 <section key={+d} className="card overflow-hidden">
                   <div className={`flex items-center justify-between px-4 py-2 text-sm font-semibold ${localDateKey(d) === todayKey ? "bg-brand-50 text-brand-800" : "bg-slate-50"}`}>
                     <span>{DOW[p.dow]} {p.d} {MONTHS[p.m]}</span>
-                    <span className="flex gap-3"><Link href={`/tickets/new?date=${localDateKey(d)}`} className="text-xs font-medium text-brand-700">+ Complaint</Link><Link href={`/calendar/new?start=${localDateKey(d)}T10:00`} className="text-xs font-medium text-slate-500">+ Event</Link></span>
+                    <span className="flex gap-3">{hasHd && <Link href={`/tickets/new?date=${localDateKey(d)}`} className="text-xs font-medium text-brand-700">+ Complaint</Link>}{hasCrm && <Link href={slotHref(d, 10)} className="text-xs font-medium text-brand-700">+ Activity</Link>}<Link href={`/calendar/new?start=${localDateKey(d)}T10:00`} className="text-xs font-medium text-slate-500">+ Event</Link></span>
                   </div>
                   {ts.length > 0 && <div className="space-y-1 px-4 pt-2">{ts.map((t) => <TicketChip key={t.id} t={t} />)}</div>}
                   {es.length + as.length + ts.length === 0 ? <p className="px-4 py-2 text-xs text-slate-400">Nothing scheduled</p> : (

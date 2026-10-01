@@ -1,4 +1,5 @@
 "use client";
+import { startOfLocalDay, localDateKey } from "@/lib/tz";
 import Link from "next/link";
 import { useOptimistic, useState, startTransition } from "react";
 import { moveLead } from "@/app/actions/crm";
@@ -23,10 +24,10 @@ export function Stars({ n, size = "text-sm" }: { n: number; size?: string }) {
 export function ActivityDot({ ts }: { ts: number | null }) {
   if (!ts) return <span className="size-2 rounded-full bg-slate-200" title="No activity planned" />;
   const d = new Date(ts * 1000);
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const today = startOfLocalDay(Date.now()); // IST, same on server and browser
   const tomorrow = new Date(today.getTime() + 864e5);
   const [cls, t] = d < today ? ["bg-red-500", "Overdue activity"] : d < tomorrow ? ["bg-amber-400", "Activity due today"] : ["bg-emerald-500", "Activity planned"];
-  return <span className={`size-2 rounded-full ${cls}`} title={`${t} · ${d.toLocaleDateString("en-IN")}`} />;
+  return <span className={`size-2 rounded-full ${cls}`} title={`${t} · ${localDateKey(d)}`} suppressHydrationWarning />;
 }
 
 

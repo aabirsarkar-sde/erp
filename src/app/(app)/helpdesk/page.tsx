@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
+import { requireDept } from "@/lib/access";
 import { lookups } from "@/lib/queries";
 import { helpdeskRows, groupBy, summary, type Group } from "@/lib/helpdesk-stats";
 import { PageHeader } from "@/components/ui";
@@ -21,10 +22,11 @@ const VIEWS = [
 type View = (typeof VIEWS)[number][0];
 
 export default async function HelpdeskDashboard({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireUser();
+  const me = await requireUser();
+  requireDept(me, "hd");
   const sp = await searchParams;
   const view: View = (VIEWS.map((v) => v[0]) as string[]).includes(sp.view ?? "") ? (sp.view as View) : "type";
-  const [rows, lk] = await Promise.all([helpdeskRows(sp), lookups()]);
+  const [rows, lk] = await Promise.all([helpdeskRows(sp, me), lookups()]);
   const s = summary(rows);
   const byType = groupBy(rows, "type");
   const groups = groupBy(rows, view);
@@ -66,7 +68,7 @@ export default async function HelpdeskDashboard({ searchParams }: { searchParams
         {[
           ["Total tickets", String(s.total), "/tickets?stage=all"],
           ["Open", String(s.open), "/tickets"],
-          ["Closed", String(s.closed), "/tickets?stage=resolved"],
+          ["Done", String(s.closed), "/tickets?stage=resolved"],
           ["Average TAT", fmtTat(s.avgTat), "/tickets?stage=resolved&sort=updated"],
           ["Customer rating", s.csat != null ? `${s.csat.toFixed(1)} / 5` : "—", "/tickets?stage=resolved"],
         ].map(([l, v, h]) => (
@@ -122,7 +124,7 @@ function GroupTable({ groups, view }: { groups: Group[]; view: View }) {
           <th className="px-4 py-2.5">{first}</th>
           <th className="px-3 py-2.5 text-right">{view === "employee" ? "Solved" : "Total"}</th>
           <th className="px-3 py-2.5 text-right">Open</th>
-          {view !== "employee" && <th className="px-3 py-2.5 text-right">Closed</th>}
+          {view !== "employee" && <th className="px-3 py-2.5 text-right">Done</th>}
           <th className="px-3 py-2.5 text-right">Avg TAT</th>
           <th className="px-4 py-2.5 text-right">Rating</th>
         </tr>

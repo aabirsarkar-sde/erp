@@ -6,16 +6,11 @@ import { MiniMarkdown } from "./mini-markdown";
 import { Sparkle } from "./ai-ui";
 
 type M = { role: "user" | "assistant"; content: string; error?: boolean };
-const SUGGESTIONS = [
-  "Which urgent tickets are still open?",
-  "How is my pipeline looking this month?",
-  "Show HOT deals above 1 crore",
-  "What are my overdue follow-ups?",
-  "Which team has the most open tickets?",
-  "Summarise everything open for Neogen Chemicals",
-];
+const HD_Q = ["Which urgent tickets are still open?", "Which zone has the most open tickets?"];
+const CRM_Q = ["How is my pipeline looking this month?", "Show HOT deals above 1 crore", "What are my overdue follow-ups?"];
 
-export function AskChat({ name }: { name: string }) {
+export function AskChat({ name, crm = true, hd = true }: { name: string; crm?: boolean; hd?: boolean }) {
+  const SUGGESTIONS = [...(hd ? HD_Q : []), ...(crm ? CRM_Q : []), "Summarise everything open for Neogen Chemicals"];
   const sp = useSearchParams();
   const [msgs, setMsgs] = useState<M[]>([]);
   const [input, setInput] = useState("");

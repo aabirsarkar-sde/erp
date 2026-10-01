@@ -1,3 +1,4 @@
+import { localDateKey } from "./tz";
 export function timeAgo(d: Date | null | undefined) {
   if (!d) return "";
   const s = Math.round((Date.now() - new Date(d).getTime()) / 1000);
@@ -42,8 +43,7 @@ export function inrShort(n: number | null | undefined) {
 
 export function fmtDateInput(d: Date | null | undefined) {
   if (!d) return "";
-  const x = new Date(d);
-  return new Date(x.getTime() - x.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  return localDateKey(d); // IST calendar date — identical on a UTC server and an IST browser
 }
 
 // Indian-system number to words, e.g. 13625000 → "One Crore Thirty Six Lakh Twenty Five Thousand"

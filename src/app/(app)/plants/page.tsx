@@ -2,6 +2,7 @@ import Link from "next/link";
 import { asc, eq, like, or, sql } from "drizzle-orm";
 import { db, plants, customers, teams, tickets } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { requireDept } from "@/lib/access";
 import { lookups } from "@/lib/queries";
 import { PageHeader } from "@/components/ui";
 import { SearchBox } from "@/components/url-filters";
@@ -13,6 +14,7 @@ export const metadata = { title: "Plants" };
 
 export default async function PlantsPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
   const me = await requireUser();
+  requireDept(me, "hd");
   const { q } = await searchParams;
   const [rows, lk, counts] = await Promise.all([
     db.select().from(plants).leftJoin(customers, eq(customers.id, plants.customerId)).where(q ? or(like(plants.plantNo, `%${q}%`), like(plants.name, `%${q}%`), like(customers.name, `%${q}%`), like(plants.city, `%${q}%`)) : undefined).orderBy(asc(plants.plantNo)),

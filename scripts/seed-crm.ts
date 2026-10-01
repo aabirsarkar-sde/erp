@@ -19,6 +19,7 @@ export async function seedCrm() {
   const all = await db.select().from(users);
   const aarti = all.find((u) => u.email.startsWith("aarti"))!;
   const gaurang = all.find((u) => u.email.startsWith("gaurang"))!;
+  const priyank = all.find((u) => u.email.startsWith("priyank"))!;
 
   const custId = async (name: string, city?: string) => {
     const f = await db.query.customers.findFirst({ where: eq(customers.name, name) });
@@ -59,7 +60,7 @@ export async function seedCrm() {
     const stage = stages.find((s) => s.id === S[sk])!;
     leadRows.push({
       title, customerId: cid, contactName, city, expectedRevenue: rev, stageId: stage.id, probability: stage.probability,
-      priority: stars, tags: tags ?? null, capacity: capacity ?? null, ownerId: i % 6 === 5 ? gaurang.id : aarti.id,
+      priority: stars, tags: tags ?? null, capacity: capacity ?? null, ownerId: i % 3 === 1 ? gaurang.id : i % 3 === 2 ? priyank.id : aarti.id, kind: i < 3 ? ("lead" as const) : ("opportunity" as const), product: ["ROSERVE RO Plant", "Multiple Effect Evaporator (MEE)", "ZLD system (RO + MEE + ATFD)", "ROCHEM DTRO", "O&M contract"][i % 5], proposalStatus: (["not_started", "preparing", "submitted", "submitted", "revised", "under_negotiation"] as const)[i % 6],
       source: ["Referral", "Website", "Existing customer", "Exhibition"][i % 4], sortOrder: i,
       expectedCloseAt: new Date(Date.now() + ((i % 5) * 20 + 10) * DAY), createdAt: new Date(Date.now() - (i * 11 + 5) * DAY), updatedAt: new Date(Date.now() - i * DAY),
     });
@@ -77,6 +78,17 @@ export async function seedCrm() {
     const due = Date.now() + ((i % 7) - 2) * DAY;
     acts.push({ type: types[i % 5]!, summary: sums[i % 5]!, leadId: l.id, customerId: l.customerId, userId: l.ownerId, createdById: aarti.id, dueAt: new Date(due) });
     acts.push({ type: "call" as const, summary: "Intro call", leadId: l.id, customerId: l.customerId, userId: l.ownerId, createdById: aarti.id, dueAt: new Date(due - 10 * DAY), doneAt: new Date(due - 10 * DAY), outcome: ["Interested, asked for budgetary offer", "Needs water analysis report first", "Decision after board meeting", "Comparing with competitor offer"][i % 4] });
+  }
+  // completed site visits with full visit reports
+  const visitNotes = [
+    ["• Met plant head and EHS manager\n• Existing RO recovery only 65%, reject going to MEE\n• Feed TDS 9,000 ppm, COD 1,800", "Customer wants a budgetary offer for DTRO on RO reject", "Send budgetary offer for DTRO"],
+    ["• Walked through ETP and MEE area\n• Space available near ETP for new skid\n• Power: 415V available", "Technically qualified — awaiting water analysis report", "Collect water analysis report"],
+    ["• Presented ZLD scheme to purchase + technical team\n• Concern on OPEX and steam consumption", "Asked for revised offer with OPEX comparison", "Send revised offer with OPEX sheet"],
+  ];
+  for (let i = 0; i < ls.length; i += 2) {
+    const l = ls[i]!, [discussion, outcome, nextAction] = visitNotes[i % 3]!;
+    const when = new Date(Math.floor((Date.now() - ((i % 9) + 3) * DAY) / DAY) * DAY + 5.5 * 3600e3); // 11:00 IST
+    acts.push({ type: "visit" as const, summary: `Site visit — ${l.title.split(" - ")[0]}`, leadId: l.id, customerId: l.customerId, userId: l.ownerId, createdById: l.ownerId, dueAt: when, doneAt: when, location: l.city, durationMin: 120, discussion, outcome, nextAction });
   }
   await db.insert(activities).values(acts);
   await db.insert(leadNotes).values(ls.map((l) => ({ leadId: l.id, authorId: aarti.id, kind: "event" as const, body: "Lead created", createdAt: l.createdAt })));

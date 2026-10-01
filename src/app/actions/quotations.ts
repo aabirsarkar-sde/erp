@@ -8,6 +8,8 @@ import { requireUser } from "@/lib/auth";
 import { quoteTotals } from "@/lib/quote-math";
 import { DEFAULT_TERMS } from "@/lib/quote-terms";
 import { saveCompany, type Company } from "@/lib/company";
+import { guardLead, canSeeQuotation, hasCrm } from "@/lib/access";
+async function guardQuote(id: number) { const me = await requireUser(); if (!(await canSeeQuotation(me, id))) throw new Error("No access to this quotation."); return me; }
 import { requireAdmin } from "@/lib/auth";
 
 async function nextNumber() {
@@ -24,7 +26,9 @@ const refresh = (id?: number, leadId?: number | null) => {
 
 export async function createQuotation(fd: FormData) {
   const me = await requireUser();
+  if (!hasCrm(me)) throw new Error("No CRM access.");
   const leadId = Number(fd.get("leadId")) || null;
+  if (leadId) await guardLead(me, leadId);
   let customerId = Number(fd.get("customerId")) || null;
   const lead = leadId ? await db.query.leads.findFirst({ where: eq(leads.id, leadId) }) : null;
   customerId ??= lead?.customerId ?? null;
@@ -72,7 +76,7 @@ const saveSchema = z.object({
 });
 
 export async function saveQuotation(id: number, payload: z.infer<typeof saveSchema>) {
-  await requireUser();
+  await guardQuote(id);
   const d = saveSchema.parse(payload);
   const q = await db.query.quotations.findFirst({ where: eq(quotations.id, id) });
   if (!q) return { error: "Not found" };
@@ -91,7 +95,7 @@ export async function saveQuotation(id: number, payload: z.infer<typeof saveSche
 }
 
 export async function setQuoteStatus(id: number, status: (typeof QUOTE_STATUS)[number]) {
-  const me = await requireUser();
+  const me = await guardQuote(id);
   const q = await db.query.quotations.findFirst({ where: eq(quotations.id, id) });
   if (!q) return;
   await db.update(quotations).set({ status, updatedAt: new Date() }).where(eq(quotations.id, id));
@@ -100,7 +104,7 @@ export async function setQuoteStatus(id: number, status: (typeof QUOTE_STATUS)[n
 }
 
 export async function reviseQuotation(id: number) {
-  const me = await requireUser();
+  const me = await guardQuote(id);
   const q = await db.query.quotations.findFirst({ where: eq(quotations.id, id), with: { lines: true } });
   if (!q) return;
   const latest = await db.query.quotations.findFirst({ where: eq(quotations.number, q.number), orderBy: desc(quotations.revision) });
@@ -113,7 +117,7 @@ export async function reviseQuotation(id: number) {
 }
 
 export async function deleteQuotation(id: number) {
-  await requireUser();
+  await guardQuote(id);
   const q = await db.query.quotations.findFirst({ where: eq(quotations.id, id) });
   if (!q || q.status !== "draft") return;
   await db.delete(quotations).where(and(eq(quotations.id, id)));

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { asc, eq, like, or, sql } from "drizzle-orm";
-import { db, customers, tickets } from "@/db";
+import { db, customers, tickets, leads } from "@/db";
+import { leadScope, ticketScope } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { PageHeader, LinkButton, Empty } from "@/components/ui";
 import { IconPlus, IconSearch } from "@/components/icons";
@@ -8,7 +9,9 @@ import { IconPlus, IconSearch } from "@/components/icons";
 export const metadata = { title: "Customers" };
 
 export default async function CustomersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  await requireUser();
+  const me = await requireUser();
+  const hd = me.hdAccess !== "none";
+  const ls = leadScope(me), ts = ticketScope(me);
   const { q } = await searchParams;
   const rows = await db
     .select({
@@ -17,13 +20,16 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       city: customers.city,
       phone: customers.phone,
       email: customers.email,
-      open: sql<number>`coalesce(sum(case when ${tickets.stage} in ('new','in_progress','waiting') then 1 else 0 end),0)`,
-      total: sql<number>`count(${tickets.id})`,
+      // helpdesk: open / total tickets · sales: open / total opportunities (only what this user may see)
+      open: hd
+        ? sql<number>`(select count(*) from ${tickets} where ${tickets.customerId} = ${customers.id} and ${tickets.stage} in ('new','in_progress','waiting')${ts ? sql` and ${ts}` : sql``})`
+        : sql<number>`(select count(*) from ${leads} where ${leads.customerId} = ${customers.id} and ${leads.status} = 'open'${ls ? sql` and ${ls}` : sql``})`,
+      total: hd
+        ? sql<number>`(select count(*) from ${tickets} where ${tickets.customerId} = ${customers.id}${ts ? sql` and ${ts}` : sql``})`
+        : sql<number>`(select count(*) from ${leads} where ${leads.customerId} = ${customers.id}${ls ? sql` and ${ls}` : sql``})`,
     })
     .from(customers)
-    .leftJoin(tickets, eq(tickets.customerId, customers.id))
     .where(q ? or(like(customers.name, `%${q}%`), like(customers.city, `%${q}%`), like(customers.email, `%${q}%`)) : undefined)
-    .groupBy(customers.id)
     .orderBy(asc(customers.name));
 
   return (
@@ -45,7 +51,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
                 <div className="truncate text-xs text-slate-500">{[c.city, c.phone, c.email].filter(Boolean).join(" · ") || "No details yet"}</div>
                 <div className="mt-2 flex gap-3 text-xs">
                   <span className={Number(c.open) ? "font-medium text-amber-700" : "text-slate-400"}>{c.open} open</span>
-                  <span className="text-slate-400">{c.total} total tickets</span>
+                  <span className="text-slate-400">{c.total} total {hd ? "tickets" : "opportunities"}</span>
                 </div>
               </div>
             </Link>

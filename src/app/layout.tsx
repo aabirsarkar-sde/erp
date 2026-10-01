@@ -1,17 +1,18 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { BRAND, EDITION } from "@/lib/edition";
 
 export const metadata: Metadata = {
-  title: { default: "Raybon ERP", template: "%s · Raybon ERP" },
-  description: "Helpdesk, CRM and operations for Zero Discharge Systems",
+  title: { default: BRAND.name, template: `%s · ${BRAND.short}` },
+  description: BRAND.description,
   manifest: "/manifest.webmanifest",
-  icons: { icon: "/icon.svg" },
+  icons: { icon: "/brand-icon.svg" },
 };
-export const viewport: Viewport = { themeColor: "#0d857e", width: "device-width", initialScale: 1 };
+export const viewport: Viewport = { themeColor: EDITION === "crm" ? "#2752c4" : "#0d857e", width: "device-width", initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" data-edition={EDITION}>
       <body>{children}</body>
     </html>
   );

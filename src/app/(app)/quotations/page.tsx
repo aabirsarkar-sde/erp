@@ -3,6 +3,7 @@ import { and, desc, eq, like, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db, quotations, customers, users, QUOTE_STATUS } from "@/db";
 import { requireUser } from "@/lib/auth";
+import { quotationScope, requireDept } from "@/lib/access";
 import { PageHeader, LinkButton, Empty, Avatar } from "@/components/ui";
 import { SearchBox, ParamSelect } from "@/components/url-filters";
 import { QuoteStatus } from "@/components/quote-status";
@@ -13,10 +14,13 @@ import { quoteRef } from "@/lib/crm";
 export const metadata = { title: "Quotations" };
 
 export default async function QuotationsPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  await requireUser();
+  const me = await requireUser();
+  requireDept(me, "crm");
   const sp = await searchParams;
   const sales = alias(users, "sales");
   const c: SQL[] = [];
+  const qs0 = quotationScope(me);
+  if (qs0) c.push(qs0);
   if (sp.status && (QUOTE_STATUS as readonly string[]).includes(sp.status)) c.push(eq(quotations.status, sp.status as (typeof QUOTE_STATUS)[number]));
   if (sp.q) c.push(or(like(quotations.number, `%${sp.q}%`), like(customers.name, `%${sp.q}%`), like(quotations.subject, `%${sp.q}%`))!);
   const rows = await db
