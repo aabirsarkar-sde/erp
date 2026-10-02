@@ -9,7 +9,7 @@ async function tryLogin(email, pw = "raybon123", vp = { width: 1440, height: 900
   const ctx = await browser.newContext({ viewport: vp });
   const p = await ctx.newPage();
   // pages stream in behind a loading skeleton: let each navigation finish before reading the page
-  const goto = p.goto.bind(p); p.goto = async (...args) => { const r = await goto(...args); await p.waitForLoadState("networkidle").catch(() => {}); return r; };
+  const goto = p.goto.bind(p); p.goto = async (...args) => { const r = await goto(...args); await p.waitForLoadState("networkidle").catch(() => {}); await p.waitForTimeout(1000); return r; };
   p.on("pageerror", e => errs.push(email + ": " + e.message)); p.on("console", m => m.type() === "error" && !m.text().includes("404") && errs.push(email + ": " + m.text()));
   await p.goto(BASE + "/login"); await p.fill("input[name=email]", email); await p.fill("input[name=password]", pw); await p.click("button");
   await Promise.race([p.waitForURL(BASE + "/"), p.locator("p.bg-red-50").waitFor()]);
@@ -49,7 +49,7 @@ for (const u of ["/calendar", "/discuss", "/documents", "/customers", "/insights
   if ((r && r.status() !== 200) || (await a.p.locator("main").innerText()).includes("Not found")) ok(`shared ${u} loads`, false);
 }
 await a.p.goto(BASE + "/calendar");
-ok("calendar buttons fit product", crm ? (await a.p.locator("a:has-text('Activity / visit')").count()) === 1 && (await a.p.locator("main a:has-text('Complaint'), a[href^='/tickets/new']").count()) === 0 : (await a.p.locator("a:has-text('Activity / visit')").count()) === 0);
+ok("calendar fits product", crm ? (await a.p.locator("main").innerText()).includes("Work done") && (await a.p.locator("a[href^='/tickets/new']").count()) === 0 : (await a.p.locator("a:has-text('Activity / visit')").count()) === 0);
 await a.p.screenshot({ path: `${OUT}/split-${ED}-calendar.png` });
 await a.p.goto(BASE + "/customers");
 ok("customer cards count " + (crm ? "opportunities" : "tickets"), (await a.p.getByText(crm ? "total opportunities" : "total tickets").count()) > 0);

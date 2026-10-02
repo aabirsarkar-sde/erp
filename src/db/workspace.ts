@@ -129,3 +129,46 @@ export const documentsRelations = relations(documents, ({ one }) => ({
   lead: one(leads, { fields: [documents.leadId], references: [leads.id] }),
   uploadedBy: one(users, { fields: [documents.uploadedById], references: [users.id] }),
 }));
+
+// ---------- Diary: one free-text note per person per day (calendar "Diary") ----------
+export const diaryEntries = sqliteTable(
+  "diary_entries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    day: text("day").notNull(), // YYYY-MM-DD (IST)
+    body: text("body").notNull(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [uniqueIndex("diary_user_day").on(t.userId, t.day)],
+);
+
+// ---------- Tasks: assign work to people, in both products ----------
+export const TASK_STATUS = ["todo", "doing", "done"] as const;
+export const tasks = sqliteTable(
+  "tasks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    title: text("title").notNull(),
+    notes: text("notes"),
+    status: text("status", { enum: TASK_STATUS }).notNull().default("todo"),
+    priority: integer("priority").notNull().default(1), // 0 low · 1 normal · 2 high · 3 urgent
+    dueAt: integer("due_at", { mode: "timestamp" }),
+    assigneeId: integer("assignee_id").references(() => users.id, { onDelete: "set null" }),
+    createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    leadId: integer("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    ticketId: integer("ticket_id").references(() => tickets.id, { onDelete: "set null" }),
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: createdAt(),
+    doneAt: integer("done_at", { mode: "timestamp" }),
+  },
+  (t) => [index("tasks_assignee").on(t.assigneeId, t.status)],
+);
+export const tasksRelations = relations(tasks, ({ one }) => ({
+  assignee: one(users, { fields: [tasks.assigneeId], references: [users.id], relationName: "taskAssignee" }),
+  createdBy: one(users, { fields: [tasks.createdById], references: [users.id], relationName: "taskCreator" }),
+  lead: one(leads, { fields: [tasks.leadId], references: [leads.id] }),
+  ticket: one(tickets, { fields: [tasks.ticketId], references: [tickets.id] }),
+  customer: one(customers, { fields: [tasks.customerId], references: [customers.id] }),
+}));

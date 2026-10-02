@@ -5,13 +5,13 @@ One codebase, deployed as **two separate products**:
 
 | Product | `APP_EDITION` | For | Main modules |
 |---|---|---|---|
-| **Raybon Sales CRM** (blue) | `crm` | Sales & Marketing | Leads, opportunities, activities & visit reports, proposals, quotations, sales reports |
+| **Raybon Sales CRM** (blue) | `crm` | Sales & Marketing | Leads, opportunities (labels, day counter, kanban views), calendar planner / work done / diary, daily report, proposals, quotations, dashboards |
 | **Raybon O&M Helpdesk** (teal) | `helpdesk` | Operations & Maintenance | Complaints/tickets by zone, plants, TAT, SLA, helpdesk dashboard, customer portal |
 
-Both include Calendar, Discuss (chat), Documents, Customers, Ask AI, Insights and Settings. Each product has its own
+Both include Calendar, Tasks, Discuss (chat), Documents, Customers, Ask AI, Insights and Settings. Each product has its own
 database and logins. Leave `APP_EDITION` empty locally to run both together.
 
-**Stack (all free tiers):** Next.js 15 (App Router, server actions) · React 19 · Tailwind CSS 4 · Drizzle ORM ·
+**Stack (all free tiers):** Next.js 16 (App Router, server actions) · React 19 · Tailwind CSS 4 · Drizzle ORM ·
 SQLite locally / Turso in production · Vercel hosting.
 
 ## Quick start
@@ -63,7 +63,7 @@ src/
     workspace/            chat, calendar, ICS, navigation
     ai/                   AI client, Ask AI tools, AI features
   db/                     Drizzle schema (core, crm, workspace) and client
-  middleware.ts           sign-in check and per-product route blocking
+  proxy.ts                sign-in check and per-product route blocking (Next.js 16 "proxy", formerly middleware)
 scripts/                  database seed scripts
 tests/                    unit tests (node:test) and end-to-end scripts (Playwright)
 docs/                     features, deployment, development process, integrations

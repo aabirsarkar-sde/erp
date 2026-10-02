@@ -1,13 +1,14 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, isNull, like } from "drizzle-orm";
 import { z } from "zod";
-import { db, leads, leadNotes, activities, crmStages, customers, contacts, users, leadMembers, documents, ACTIVITY_TYPES, PROPOSAL_STATUS } from "@/db";
+import { db, leads, leadNotes, activities, crmStages, customers, contacts, users, leadMembers, documents, tagDefs, diaryEntries, ACTIVITY_TYPES, PROPOSAL_STATUS, TAG_GROUPS } from "@/db";
 import { saveFile, MAX_UPLOAD } from "@/lib/core/storage";
-import { PROPOSAL_META } from "@/lib/crm/meta";
+import { PROPOSAL_META, joinTags, tagList, orderTag, missingContact, TAG_GROUP_COLOR } from "@/lib/crm/meta";
+import { atLocal10, localDateKey } from "@/lib/core/tz";
 import { requireUser } from "@/lib/core/auth";
-import { guardLead, hasCrm, activityScope } from "@/lib/core/access";
+import { guardLead, hasCrm, activityScope, leadScope } from "@/lib/core/access";
 import { inr } from "@/lib/core/format";
 import { fromLocalInput } from "@/lib/core/tz";
 
@@ -37,6 +38,7 @@ const leadSchema = z.object({
   email: optStr,
   phone: optStr,
   city: optStr,
+  address: optStr,
   capacity: optStr,
   source: optStr,
   expectedRevenue: money,
@@ -65,8 +67,13 @@ export async function createLead(_p: { error?: string } | undefined, fd: FormDat
     const [c] = await db.insert(customers).values({ name: d.companyName, city: d.city, email: d.email, phone: d.phone }).returning();
     customerId = c!.id;
   }
+  // existing customer: fill blank contact fields from the customer record so nobody types them twice
+  if (d.customerId && (!d.phone || !d.email || !d.address || !d.contactName)) {
+    const c = await db.query.customers.findFirst({ where: eq(customers.id, d.customerId), with: { contacts: true } });
+    if (c) Object.assign(d, { phone: d.phone ?? c.contacts[0]?.phone ?? c.phone, email: d.email ?? c.contacts[0]?.email ?? c.email, address: d.address ?? c.address, contactName: d.contactName ?? c.contacts[0]?.name ?? null, city: d.city ?? c.city });
+  }
   let contactId: number | null = null;
-  if (d.contactName && customerId) {
+  if (d.contactName && customerId && !d.customerId) {
     const [c] = await db.insert(contacts).values({ name: d.contactName, email: d.email, phone: d.phone, customerId }).returning();
     contactId = c!.id;
   }
@@ -75,6 +82,7 @@ export async function createLead(_p: { error?: string } | undefined, fd: FormDat
     .values({ ...d, customerId, contactId, stageId: stage.id, probability: d.probability ?? stage.probability, ownerId: d.ownerId ?? me.id, sortOrder: -Date.now() / 1e6 })
     .returning();
   await log(l!.id, me.id, d.kind === "lead" ? "Lead created" : "Opportunity created");
+  await syncContactReminder(l!.id);
   refresh();
   redirect(`/crm/${l!.id}`);
 }
@@ -94,6 +102,7 @@ export async function updateLead(id: number, fd: FormData) {
   }
   await db.update(leads).set({ ...d, updatedAt: new Date() }).where(eq(leads.id, id));
   for (const e of events) await log(id, me.id, e);
+  await syncContactReminder(id);
   refresh(id);
 }
 
@@ -116,8 +125,12 @@ export async function moveLead(id: number, stageId: number, sortOrder?: number) 
 export async function markWon(id: number) {
   const me = await requireUser();
   await guardLead(me, id);
-  await db.update(leads).set({ status: "won", probability: 100, closedAt: new Date(), updatedAt: new Date() }).where(eq(leads.id, id));
-  await log(id, me.id, "🎉 Marked as WON");
+  const now = new Date();
+  const cur = await db.query.leads.findFirst({ where: eq(leads.id, id), columns: { tags: true, createdAt: true } });
+  // "order received in FY" label is added automatically
+  const tags = joinTags([...tagList(cur?.tags ?? null).filter((t) => !/^OR FY/i.test(t)), orderTag(now)]);
+  await db.update(leads).set({ status: "won", probability: 100, closedAt: now, tags, updatedAt: now }).where(eq(leads.id, id));
+  await log(id, me.id, `🎉 Marked as WON${cur ? ` — ${Math.max(0, Math.floor((+now - +cur.createdAt) / 864e5))} days from creation` : ""}`);
   refresh(id);
 }
 
@@ -176,13 +189,19 @@ export async function createActivity(_p: { ok?: boolean; error?: string } | unde
   if (d.leadId) await guardLead(me, d.leadId);
   let customerId = d.customerId;
   if (d.leadId && !customerId) customerId = (await db.query.leads.findFirst({ where: eq(leads.id, d.leadId) }))?.customerId ?? null;
+  // an entry with just the customer's name goes onto that customer's opportunity when there's only one open
+  if (customerId && !d.leadId && hasCrm(me)) {
+    const open = await db.select({ id: leads.id }).from(leads).where(and(eq(leads.customerId, customerId), eq(leads.status, "open"), leadScope(me))).limit(2);
+    if (open.length === 1) d.leadId = open[0]!.id;
+  }
+  const when = d.dueAt ?? new Date();
   await db.insert(activities).values({
     ...d,
     customerId,
     userId: d.userId ?? me.id,
     createdById: me.id,
-    dueAt: d.dueAt ?? new Date(),
-    doneAt: done ? new Date() : null,
+    dueAt: when,
+    doneAt: done ? (+when <= Date.now() ? when : new Date()) : null, // work logged for earlier today keeps its time
   });
   if (done) await followUp(me.id, { ...d, customerId }, fd);
   if (d.leadId) {
@@ -191,7 +210,8 @@ export async function createActivity(_p: { ok?: boolean; error?: string } | unde
   }
   refresh(d.leadId ?? undefined);
   revalidatePath("/calendar");
-  if (fd.get("redirect")) redirect(String(fd.get("redirect")));
+  // back to the calendar on the day the activity was put
+  if (fd.get("redirect")) redirect(String(fd.get("redirect")).startsWith("/calendar") ? `/calendar?date=${localDateKey(when)}` : String(fd.get("redirect")));
   return { ok: true };
 }
 
@@ -301,4 +321,63 @@ export async function uploadLeadDocs(id: number, _p: { ok?: boolean; error?: str
   }
   refresh(id);
   return { ok: true };
+}
+
+// ---------- labels ----------
+export async function setLeadTags(id: number, tags: string[]) {
+  const me = await requireUser();
+  await guardLead(me, id);
+  const clean = joinTags(tags.map((t) => t.replace(/,/g, " ").trim().slice(0, 40)).filter(Boolean));
+  const old = await db.query.leads.findFirst({ where: eq(leads.id, id), columns: { tags: true } });
+  await db.update(leads).set({ tags: clean, updatedAt: new Date() }).where(eq(leads.id, id));
+  const before = new Set(tagList(old?.tags ?? null).map((t) => t.toLowerCase())), after = tagList(clean);
+  const added = after.filter((t) => !before.has(t.toLowerCase()));
+  const removed = tagList(old?.tags ?? null).filter((t) => !after.some((a) => a.toLowerCase() === t.toLowerCase()));
+  if (added.length || removed.length) await log(id, me.id, `Labels: ${[...added.map((t) => `+${t}`), ...removed.map((t) => `−${t}`)].join(", ")}`);
+  refresh(id);
+}
+
+/** create or update a label definition (group + colour); managers and admins only */
+export async function saveTagDef(fd: FormData) {
+  const me = await requireUser();
+  if (me.role === "agent") return;
+  const name = String(fd.get("name") ?? "").replace(/,/g, " ").trim().slice(0, 40);
+  if (!name) return;
+  const group = (TAG_GROUPS as readonly string[]).includes(String(fd.get("group"))) ? (String(fd.get("group")) as (typeof TAG_GROUPS)[number]) : "Other";
+  const color = String(fd.get("color") || TAG_GROUP_COLOR[group] || "slate");
+  await db.insert(tagDefs).values({ name, group, color }).onConflictDoUpdate({ target: tagDefs.name, set: { group, color } });
+  revalidatePath("/settings");
+  revalidatePath("/crm");
+}
+
+export async function deleteTagDef(name: string) {
+  const me = await requireUser();
+  if (me.role === "agent") return;
+  await db.delete(tagDefs).where(eq(tagDefs.name, name));
+  revalidatePath("/settings");
+}
+
+// ---------- missing contact details → automatic reminder ----------
+const REMINDER = "Complete contact details";
+async function syncContactReminder(leadId: number) {
+  const l = await db.query.leads.findFirst({ where: eq(leads.id, leadId) });
+  if (!l) return;
+  const missing = l.status === "open" ? missingContact(l) : [];
+  const open = await db.query.activities.findFirst({ where: and(eq(activities.leadId, leadId), isNull(activities.doneAt), like(activities.summary, `${REMINDER}%`)) });
+  if (missing.length && !open) {
+    await db.insert(activities).values({ type: "todo", summary: `${REMINDER}: ${missing.join(", ")}`, leadId, customerId: l.customerId, userId: l.ownerId, createdById: l.ownerId, dueAt: atLocal10(1) });
+  } else if (missing.length && open && open.summary !== `${REMINDER}: ${missing.join(", ")}`) {
+    await db.update(activities).set({ summary: `${REMINDER}: ${missing.join(", ")}` }).where(eq(activities.id, open.id));
+  } else if (!missing.length && open) {
+    await db.update(activities).set({ doneAt: new Date(), outcome: "Contact details completed" }).where(eq(activities.id, open.id));
+  }
+}
+
+// ---------- diary: one note per person per day ----------
+export async function saveDiary(day: string, body: string) {
+  const me = await requireUser();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+  const text = body.slice(0, 8000);
+  if (!text.trim()) { await db.delete(diaryEntries).where(and(eq(diaryEntries.userId, me.id), eq(diaryEntries.day, day))); return; }
+  await db.insert(diaryEntries).values({ userId: me.id, day, body: text }).onConflictDoUpdate({ target: [diaryEntries.userId, diaryEntries.day], set: { body: text, updatedAt: new Date() } });
 }

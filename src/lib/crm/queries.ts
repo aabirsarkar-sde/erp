@@ -6,7 +6,7 @@ import { db, leads, crmStages, customers, users, activities, leadMembers } from 
 import { leadScope } from "@/lib/core/access";
 import type { CurrentUser } from "@/lib/core/auth";
 
-export type LeadFilters = { q?: string; owner?: string; status?: string; tag?: string; kind?: string; source?: string };
+export type LeadFilters = { q?: string; owner?: string; status?: string; tag?: string; kind?: string; source?: string; product?: string };
 
 export async function listLeads(f: LeadFilters, me: CurrentUser) {
   const meId = me.id;
@@ -21,6 +21,7 @@ export async function listLeads(f: LeadFilters, me: CurrentUser) {
   else if (f.owner && f.owner !== "all" && Number.isFinite(Number(f.owner))) c.push(eq(leads.ownerId, Number(f.owner)));
   if (f.source) c.push(eq(leads.source, f.source));
   if (f.tag) c.push(like(leads.tags, `%${f.tag}%`));
+  if (f.product) c.push(eq(leads.product, f.product));
   if (f.q?.trim()) {
     const p = `%${f.q.trim()}%`;
     c.push(or(like(leads.title, p), like(customers.name, p), like(leads.contactName, p), like(leads.tags, p), like(leads.city, p))!);
@@ -51,6 +52,11 @@ export async function listLeads(f: LeadFilters, me: CurrentUser) {
       customerId: leads.customerId,
       customerName: customers.name,
       contactName: leads.contactName,
+      phone: leads.phone,
+      email: leads.email,
+      address: leads.address,
+      ownerId: leads.ownerId,
+      closedAt: leads.closedAt,
       city: leads.city,
       ownerName: owner.name,
       nextActivity: nextAct.next,

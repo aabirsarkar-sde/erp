@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { db, plants, ticketWatchers, cannedResponses, aiUsage, events, eventAttendees, calendarTokens, channels, channelMembers, chatMessages, docFolders, documents, users, teams, teamMembers, customers, contacts, tickets, messages, attachments, settings, quotationLines, quotations, products, leadNotes, activities, leads, crmStages } from "../src/db";
+import { db, tasks, diaryEntries, plants, ticketWatchers, cannedResponses, aiUsage, events, eventAttendees, calendarTokens, channels, channelMembers, chatMessages, docFolders, documents, users, teams, teamMembers, customers, contacts, tickets, messages, attachments, settings, quotationLines, quotations, products, leadNotes, activities, leads, crmStages } from "../src/db";
 import { sql } from "drizzle-orm";
 import { seedCrm } from "./seed-crm";
 import { BRAND, editionHasCrm, editionHasHd } from "../src/lib/core/edition";
@@ -11,7 +11,7 @@ async function main() {
     console.log("Database already has data — skipping seed (use --force to wipe & reseed).");
     return;
   }
-  for (const t of [ticketWatchers, cannedResponses, eventAttendees, events, calendarTokens, chatMessages, channelMembers, channels, documents, docFolders, quotationLines, quotations, products, leadNotes, activities, leads, crmStages, attachments, messages, tickets, plants, contacts, customers, teamMembers, teams, users, settings, aiUsage]) await db.delete(t);
+  for (const t of [tasks, diaryEntries, ticketWatchers, cannedResponses, eventAttendees, events, calendarTokens, chatMessages, channelMembers, channels, documents, docFolders, quotationLines, quotations, products, leadNotes, activities, leads, crmStages, attachments, messages, tickets, plants, contacts, customers, teamMembers, teams, users, settings, aiUsage]) await db.delete(t);
   await db.run(sql`delete from sqlite_sequence`).catch(() => {});
 
   const hash = (p: string) => bcrypt.hashSync(p, 10);
@@ -216,5 +216,16 @@ async function seedWorkspace() {
     const [service] = await db.insert(channels).values({ name: "service", description: "Site visits, breakdowns and field updates" }).returning();
     await db.insert(chatMessages).values({ channelId: service!.id, authorId: rakesh.id, body: "At Neogen Dahej now. TKT-0002 — condenser vacuum was low due to a leaking gasket, replaced. Monitoring for 2 hours.", createdAt: new Date(now - 2 * H) });
   }
+  // a few tasks and a diary note so the Tasks board and the Day view aren't empty
+  const someone = gaurang ?? rakesh;
+  const lead1 = editionHasCrm ? (await db.select({ id: leads.id }).from(leads).limit(1))[0] : undefined;
+  const tk1 = editionHasHd ? (await db.select({ id: tickets.id }).from(tickets).limit(1))[0] : undefined;
+  await db.insert(tasks).values([
+    { title: "Prepare revised offer with OPEX comparison", assigneeId: someone?.id ?? aarti.id, createdById: aarti.id, dueAt: at(2, 0), priority: 2, leadId: lead1?.id ?? null },
+    { title: "Collect water analysis report from customer", assigneeId: aarti.id, createdById: admin.id, dueAt: at(0, 0), priority: 1, status: "doing" as const, leadId: lead1?.id ?? null },
+    { title: "Arrange spare membranes for site", assigneeId: someone?.id ?? aarti.id, createdById: aarti.id, dueAt: at(-2, 0), priority: 3, ticketId: tk1?.id ?? null },
+    { title: "Update price list for 2026-27", assigneeId: aarti.id, createdById: aarti.id, status: "done" as const, doneAt: new Date(now - 26 * H) },
+  ]);
+  await db.insert(diaryEntries).values({ userId: aarti.id, day: new Date(now + 330 * 60_000).toISOString().slice(0, 10), body: "Met the purchase team at Neogen — budget approval expected next week.\nCompetitor quoted 8% lower on MEE; need to stress lower steam consumption." });
   await db.insert(docFolders).values([{ name: "Brochures" }, { name: "Water analysis reports" }, { name: "Drawings & P&IDs" }, { name: "Manuals & SOPs" }]);
 }

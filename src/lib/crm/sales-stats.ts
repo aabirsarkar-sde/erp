@@ -4,7 +4,7 @@ import { alias } from "drizzle-orm/sqlite-core";
 import { db, leads, crmStages, customers, users, activities, contacts } from "@/db";
 import { activityScope, leadScope } from "@/lib/core/access";
 import { fromLocalInput } from "@/lib/core/tz";
-import { PROPOSAL_META } from "@/lib/crm/meta";
+import { PROPOSAL_META, daysBetween, tagList, type TagDef } from "@/lib/crm/meta";
 import type { CurrentUser } from "@/lib/core/auth";
 
 export type SalesFilters = { days?: string; from?: string; to?: string; user?: string };
@@ -25,7 +25,7 @@ export async function salesReport(f: SalesFilters, me: CurrentUser) {
   const ls = leadScope(me); if (ls) lc.push(ls);
   if (userId) lc.push(eq(leads.ownerId, userId));
   const allLeadsQ = db
-    .select({ id: leads.id, title: leads.title, kind: leads.kind, status: leads.status, stage: crmStages.name, stageSeq: crmStages.sequence, value: leads.expectedRevenue, probability: leads.probability, source: leads.source, proposalStatus: leads.proposalStatus, lostReason: leads.lostReason, product: leads.product, createdAt: leads.createdAt, closedAt: leads.closedAt, convertedAt: leads.convertedAt, ownerId: leads.ownerId, owner: owner.name, customer: customers.name })
+    .select({ id: leads.id, title: leads.title, kind: leads.kind, status: leads.status, stage: crmStages.name, stageSeq: crmStages.sequence, value: leads.expectedRevenue, probability: leads.probability, source: leads.source, proposalStatus: leads.proposalStatus, lostReason: leads.lostReason, product: leads.product, tags: leads.tags, city: leads.city, createdAt: leads.createdAt, closedAt: leads.closedAt, convertedAt: leads.convertedAt, ownerId: leads.ownerId, owner: owner.name, customer: customers.name })
     .from(leads).leftJoin(crmStages, eq(crmStages.id, leads.stageId)).leftJoin(owner, eq(owner.id, leads.ownerId)).leftJoin(customers, eq(customers.id, leads.customerId))
     .where(lc.length ? and(...lc) : undefined);
   const inP = (d: Date | null) => !!d && (!from || +d >= +from) && (!to || +d < +to);
@@ -72,8 +72,46 @@ export async function salesReport(f: SalesFilters, me: CurrentUser) {
     openN: open.length, openValue: sum(open), weighted: open.reduce((a, l) => a + (l.value * l.probability) / 100, 0),
     wonN: won.length, wonValue: sum(won), lostN: lost.length,
     winRate: won.length + lost.length ? (won.length / (won.length + lost.length)) * 100 : null,
+    // turnaround: days from creating the opportunity to the order (won), and average age of what's still open
+    winTat: won.length ? won.reduce((a, l) => a + daysBetween(l.createdAt, l.closedAt!), 0) / won.length : null,
+    openAge: open.length ? open.reduce((a, l) => a + daysBetween(l.createdAt, Date.now()), 0) / open.length : null,
     visits: acts.filter((a) => a.type === "visit").length, calls: acts.filter((a) => a.type === "call").length, meetings: acts.filter((a) => a.type === "meeting").length,
   };
-  return { label, totals, byStage, bySalesperson, bySource, proposals, lostReasons, won, lost, visits: acts.filter((a) => a.type === "visit" || a.type === "meeting"), activities: acts, open };
+  return { label, totals, allLeads, inPeriod: inP, byStage, bySalesperson, bySource, proposals, lostReasons, won, lost, visits: acts.filter((a) => a.type === "visit" || a.type === "meeting"), activities: acts, open };
 }
 export type SalesReport = Awaited<ReturnType<typeof salesReport>>;
+
+export const DIMENSIONS = [["owner", "Salesperson"], ["product", "Product"], ["geography", "Geography"], ["temperature", "Hot / Warm / Cold"], ["stage", "Stage"], ["customer", "Customer"], ["source", "Lead source"], ["label", "Any label"]] as const;
+export type Dimension = (typeof DIMENSIONS)[number][0];
+
+/** Pipeline "dashboard by …": open count/value, weighted, average age, won count/value and turnaround per group */
+export function groupPipeline(r: SalesReport, dim: Dimension, defs: TagDef[]) {
+  const group = (l: SalesReport["allLeads"][number]): string[] => {
+    const labelIn = (g: string) => tagList(l.tags).filter((t) => defs.find((d) => d.name.toLowerCase() === t.toLowerCase())?.group === g);
+    switch (dim) {
+      case "owner": return [l.owner ?? "Unassigned"];
+      case "product": return [l.product ?? "Not set"];
+      case "geography": { const g = labelIn("Geography"); return g.length ? g : [l.city ?? "Not set"]; }
+      case "temperature": { const g = labelIn("Temperature"); return g.length ? g : ["No temperature label"]; }
+      case "stage": return [l.stage ?? "—"];
+      case "customer": return [l.customer ?? "—"];
+      case "source": return [l.source ?? "Not recorded"];
+      case "label": { const t = tagList(l.tags); return t.length ? t : ["No label"]; }
+    }
+  };
+  const m = new Map<string, { label: string; open: number; value: number; weighted: number; ageSum: number; won: number; wonValue: number; tatSum: number; lost: number }>();
+  const G = (k: string) => { let g = m.get(k); if (!g) m.set(k, (g = { label: k, open: 0, value: 0, weighted: 0, ageSum: 0, won: 0, wonValue: 0, tatSum: 0, lost: 0 })); return g; };
+  for (const l of r.allLeads) {
+    if (l.kind !== "opportunity" && l.status === "open") continue;
+    for (const k of group(l)) {
+      const g = G(k);
+      if (l.status === "open") { g.open++; g.value += l.value; g.weighted += (l.value * l.probability) / 100; g.ageSum += daysBetween(l.createdAt, Date.now()); }
+      else if (l.status === "won" && r.inPeriod(l.closedAt)) { g.won++; g.wonValue += l.value; g.tatSum += daysBetween(l.createdAt, l.closedAt!); }
+      else if (l.status === "lost" && r.inPeriod(l.closedAt)) g.lost++;
+    }
+  }
+  return [...m.values()]
+    .map((g) => ({ ...g, avgAge: g.open ? g.ageSum / g.open : null, avgTat: g.won ? g.tatSum / g.won : null }))
+    .filter((g) => g.open || g.won || g.lost)
+    .sort((a, b) => b.value - a.value || b.wonValue - a.wonValue);
+}

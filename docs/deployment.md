@@ -22,7 +22,7 @@ Every push to `main` redeploys both. Pushes to other branches create **preview**
 | `BLOB_READ_WRITE_TOKEN` | for uploads | Vercel Blob (Storage tab → connect). Without it uploads fail on Vercel |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `MAIL_FROM` | for email | Without them emails are only logged |
 | `AI_API_KEY`, `AI_BASE_URL`, `AI_MODEL` | optional | See [features](features.md#ai-free) |
-| `CRON_SECRET` | helpdesk | Protects the daily escalation email |
+| `CRON_SECRET` | both | Protects the scheduled jobs: daily escalation email (helpdesk) and the 7:30 pm daily sales report (CRM) |
 | `INBOUND_EMAIL_SECRET` | helpdesk, optional | For email-to-ticket ([worker](integrations/cloudflare-email-worker.js)) |
 
 ## Database changes

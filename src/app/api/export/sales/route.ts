@@ -1,7 +1,7 @@
 import { getCurrentUser } from "@/lib/core/auth";
 import { salesReport } from "@/lib/crm/sales-stats";
 import { addSheet, newWorkbook, xlsxResponse } from "@/lib/core/xlsx";
-import { ACTIVITY_META, PROPOSAL_META } from "@/lib/crm/meta";
+import { ACTIVITY_META, PROPOSAL_META, daysBetween } from "@/lib/crm/meta";
 import { fmtDateTime, fmtDate } from "@/lib/core/format";
 
 export async function GET(req: Request) {
@@ -30,9 +30,9 @@ export async function GET(req: Request) {
   ], r.activities.map((a) => ({ ...a, date: fmtDateTime(a.doneAt), type: ACTIVITY_META[a.type].label })));
   addSheet(wb, "Opportunities", [
     { header: "Opportunity", key: "title", width: 34 }, { header: "Client", key: "customer", width: 28 }, { header: "Product / service", key: "product", width: 24 }, { header: "Stage", key: "stage", width: 16 },
-    { header: "Proposal", key: "proposal", width: 18 }, { header: "Value", key: "value", width: 14, numFmt: INR }, { header: "Prob %", key: "probability" }, { header: "Salesperson", key: "owner", width: 18 }, { header: "Source", key: "source", width: 16 }, { header: "Created", key: "created", width: 12 },
-  ], r.open.map((l) => ({ ...l, proposal: PROPOSAL_META[l.proposalStatus]?.label, created: fmtDate(l.createdAt) })));
-  addSheet(wb, "Won & lost", [{ header: "Result", key: "res" }, { header: "Opportunity", key: "title", width: 34 }, { header: "Client", key: "customer", width: 28 }, { header: "Value", key: "value", width: 14, numFmt: INR }, { header: "Salesperson", key: "owner", width: 18 }, { header: "Closed", key: "closed", width: 12 }, { header: "Lost reason", key: "lostReason", width: 24 }],
-    [...r.won.map((l) => ({ ...l, res: "Won" })), ...r.lost.map((l) => ({ ...l, res: "Lost" }))].map((l) => ({ ...l, closed: fmtDate(l.closedAt) })));
+    { header: "Proposal", key: "proposal", width: 18 }, { header: "Value", key: "value", width: 14, numFmt: INR }, { header: "Prob %", key: "probability" }, { header: "Salesperson", key: "owner", width: 18 }, { header: "Source", key: "source", width: 16 }, { header: "Labels", key: "tags", width: 30 }, { header: "Created", key: "created", width: 12 }, { header: "Age (days)", key: "age" },
+  ], [...r.open].sort((a, b) => b.value - a.value).map((l) => ({ ...l, proposal: PROPOSAL_META[l.proposalStatus]?.label, created: fmtDate(l.createdAt), age: daysBetween(l.createdAt, Date.now()) })));
+  addSheet(wb, "Won & lost", [{ header: "Result", key: "res" }, { header: "Opportunity", key: "title", width: 34 }, { header: "Client", key: "customer", width: 28 }, { header: "Value", key: "value", width: 14, numFmt: INR }, { header: "Salesperson", key: "owner", width: 18 }, { header: "Closed", key: "closed", width: 12 }, { header: "TAT (days)", key: "tat" }, { header: "Lost reason", key: "lostReason", width: 24 }],
+    [...r.won.map((l) => ({ ...l, res: "Won" })), ...r.lost.map((l) => ({ ...l, res: "Lost" }))].map((l) => ({ ...l, closed: fmtDate(l.closedAt), tat: l.closedAt ? daysBetween(l.createdAt, l.closedAt) : "" })));
   return xlsxResponse(wb, `sales-report-${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

@@ -8,6 +8,8 @@ const errs = [];
 async function login(email, pw, vp = { width: 1440, height: 900 }) {
   const ctx = await browser.newContext({ viewport: vp, acceptDownloads: true });
   const p = await ctx.newPage();
+  // pages stream in and then hydrate: let each navigation settle before clicking
+  const goto = p.goto.bind(p); p.goto = async (...args) => { const r = await goto(...args); await p.waitForLoadState("networkidle").catch(() => {}); await p.waitForTimeout(1000); return r; };
   p.on("pageerror", e => errs.push(email + ": " + e.message)); p.on("console", m => m.type() === "error" && errs.push(email + ": " + m.text()));
   await p.goto(BASE + "/login"); await p.fill("input[name=email]", email); await p.fill("input[name=password]", pw); await p.click("button"); await p.waitForURL(BASE + "/");
   return { ctx, p };
@@ -57,7 +59,7 @@ console.log("transferred ✓");
 // email ticket
 await p.click("button:has-text('Email ticket')");
 await p.fill("input[name=to]", "service.head@rochem.example, bad-address");
-await p.click("form button:has-text('Send')"); await p.getByText("Sent to 1 recipient").waitFor();
+await p.click("form:has(input[name=to]) button:has-text('Send')"); await p.getByText("Sent to 1 recipient").waitFor();
 console.log("emailed ✓");
 await p.click("a:has-text('Email thread')"); await p.waitForURL(/view=mail/);
 console.log("mail thread items:", await p.locator("ol > li").count());

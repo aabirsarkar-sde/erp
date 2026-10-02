@@ -47,19 +47,10 @@ export function LeadDetails({ l, users, customers }: { l: L; users: Opt[]; custo
         <select name="customerId" defaultValue={l.customerId ?? ""} onChange={onChange} className="input"><option value="">—</option>{customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       </Field>
       <Field label="Expected closing"><input name="expectedCloseAt" type="date" defaultValue={fmtDateInput(l.expectedCloseAt)} onChange={onChange} className="input" /></Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Contact"><input name="contactName" defaultValue={l.contactName ?? ""} onBlur={onBlur} className="input" /></Field>
-        <Field label="Phone"><input name="phone" defaultValue={l.phone ?? ""} onBlur={onBlur} className="input" /></Field>
-      </div>
-      <Field label="Email"><input name="email" type="email" defaultValue={l.email ?? ""} onBlur={onBlur} className="input" /></Field>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="City"><input name="city" defaultValue={l.city ?? ""} onBlur={onBlur} className="input" /></Field>
-        <Field label="Capacity"><input name="capacity" defaultValue={l.capacity ?? ""} onBlur={onBlur} className="input" /></Field>
-      </div>
+      <Field label="Capacity"><input name="capacity" defaultValue={l.capacity ?? ""} onBlur={onBlur} className="input" /></Field>
       <Field label="Source">
         <select name="source" defaultValue={l.source ?? ""} onChange={onChange} className="input"><option value="">—</option>{LEAD_SOURCES.map((s) => <option key={s}>{s}</option>)}</select>
       </Field>
-      <Field label="Tags"><input name="tags" defaultValue={l.tags ?? ""} onBlur={onBlur} className="input" placeholder="comma separated" /></Field>
       <Field label="Inquiry details"><textarea name="description" rows={4} defaultValue={l.description ?? ""} onBlur={onBlur} className="input" /></Field>
     </form>
   );

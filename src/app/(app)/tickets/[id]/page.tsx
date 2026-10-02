@@ -5,6 +5,8 @@ import { db, tickets, messages, users, cannedResponses } from "@/db";
 import { requireUser } from "@/lib/core/auth";
 import { canSeeTicket } from "@/lib/core/access";
 import { lookups } from "@/lib/core/lookups";
+import { listTasks } from "@/lib/workspace/tasks";
+import { TaskList, TaskForm } from "@/components/workspace/tasks";
 import { getSla } from "@/lib/helpdesk/sla";
 import { responseSla, TONE_CLS } from "@/lib/helpdesk/sla-status";
 import { AttachmentList } from "@/components/helpdesk/attachment-list";
@@ -30,7 +32,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
   const id = Number((await params).id);
   if (!Number.isFinite(id)) notFound();
   // access check and data load run together (one round trip); data is discarded if access fails
-  const [ok, t, lk, sla, ho, staff, canned] = await Promise.all([
+  const [ok, t, lk, sla, ho, staff, canned, tks] = await Promise.all([
     canSeeTicket(me, id),
     db.query.tickets.findFirst({
       where: eq(tickets.id, id),
@@ -38,6 +40,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
     }),
     lookups(),
     getSla(), getHoEmails(), db.select({ email: users.email }).from(users).where(eq(users.active, true)), db.select().from(cannedResponses),
+    listTasks(me, { ticketId: id }),
   ]);
   if (!ok || !t) notFound();
   const mailSuggestions = [...new Set([...ho, t.complainantEmail, t.contact?.email, ...staff.map((u) => u.email)].filter((x): x is string => !!x))];
@@ -129,6 +132,11 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
         <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">
           {aiEnabled() && <AiTicketPanel ticketId={t.id} />}
           <TicketProps t={t} teams={lk.teams} users={lk.users} customers={lk.customers} />
+          <section className="card">
+            <h3 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Tasks ({tks.filter((x) => x.status !== "done").length} open)</h3>
+            <TaskList tasks={tks} users={lk.users} />
+            <div className="border-t border-slate-100 bg-slate-50/60 p-3"><TaskForm users={lk.users} meId={me.id} ticketId={t.id} compact /></div>
+          </section>
           <div className="card space-y-1.5 p-4 text-xs text-slate-500">
             <div className="flex justify-between"><span>Created</span><span className="text-slate-700">{fmtDateTime(t.createdAt)}</span></div>
             <div className="flex justify-between"><span>First response</span><span className="text-slate-700">{t.firstResponseAt ? fmtDateTime(t.firstResponseAt) : "—"}</span></div>

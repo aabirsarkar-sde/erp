@@ -1,9 +1,17 @@
 import { DEFAULT_TERMS } from "../src/lib/crm/quote-terms";
 import { eq } from "drizzle-orm";
-import { db, customers, contacts, users, crmStages, leads, activities, leadNotes, products, quotations, quotationLines } from "../src/db";
+import { db, customers, contacts, users, crmStages, leads, activities, leadNotes, products, quotations, quotationLines, tagDefs } from "../src/db";
 
 export async function seedCrm() {
-  for (const t of [quotationLines, quotations, products, leadNotes, activities, leads, crmStages]) await db.delete(t);
+  for (const t of [quotationLines, quotations, products, leadNotes, activities, leads, crmStages, tagDefs]) await db.delete(t);
+  // default labels: geography, customer type, temperature
+  const T = (group: "Geography" | "Customer" | "Temperature" | "Product", color: string, names: string[]) => names.map((name) => ({ name, group, color }));
+  await db.insert(tagDefs).values([
+    ...T("Geography", "sky", ["Ankleshwar", "Vadodara", "Dahej", "Panoli", "Jhagadia", "Vapi", "Bharuch", "Ahmedabad", "Maharashtra"]),
+    ...T("Customer", "violet", ["Big ticket customer", "Repeat customer", "PSU"]),
+    { name: "Hot", group: "Temperature", color: "red" }, { name: "Warm", group: "Temperature", color: "amber" }, { name: "Cold", group: "Temperature", color: "blue" },
+    ...T("Product", "teal", ["RO", "MEE", "ZLD", "DTRO", "O&M"]),
+  ]);
   const stages = await db
     .insert(crmStages)
     .values([
@@ -60,7 +68,14 @@ export async function seedCrm() {
     const stage = stages.find((s) => s.id === S[sk])!;
     leadRows.push({
       title, customerId: cid, contactName, city, expectedRevenue: rev, stageId: stage.id, probability: stage.probability,
-      priority: stars, tags: tags ?? null, capacity: capacity ?? null, ownerId: i % 3 === 1 ? gaurang.id : i % 3 === 2 ? priyank.id : aarti.id, kind: i < 3 ? ("lead" as const) : ("opportunity" as const), product: ["ROSERVE RO Plant", "Multiple Effect Evaporator (MEE)", "ZLD system (RO + MEE + ATFD)", "ROCHEM DTRO", "O&M contract"][i % 5], proposalStatus: (["not_started", "preparing", "submitted", "submitted", "revised", "under_negotiation"] as const)[i % 6],
+      priority: stars, tags: [
+        ["Ankleshwar", "Vadodara", "Dahej", "Panoli", "Jhagadia", "Vapi", "Bharuch", "Ahmedabad"].includes(city ?? "") ? city : null,
+        sk === "HOT" ? "Hot" : sk === "WARM" ? "Warm" : sk === "COLD" ? "Cold" : null,
+        rev >= 20000000 ? "Big ticket customer" : null,
+        ["RO", "MEE", "ZLD", "DTRO", "O&M"][i % 5],
+      ].filter(Boolean).join(", ") || (tags ?? null),
+      phone: i % 3 === 0 ? null : `+91 98${String(2500000 + i * 7919).slice(0, 8)}`, email: i % 4 === 0 ? null : `${contactName.split(" ").pop()!.toLowerCase().replace(/[^a-z]/g, "")}@${cname.split(" ")[0]!.toLowerCase().replace(/[^a-z]/g, "")}.com`,
+      address: i % 2 === 0 ? null : `GIDC Estate, ${city}`, capacity: capacity ?? null, ownerId: i % 3 === 1 ? gaurang.id : i % 3 === 2 ? priyank.id : aarti.id, kind: i < 3 ? ("lead" as const) : ("opportunity" as const), product: ["ROSERVE RO Plant", "Multiple Effect Evaporator (MEE)", "ZLD system (RO + MEE + ATFD)", "ROCHEM DTRO", "O&M contract"][i % 5], proposalStatus: (["not_started", "preparing", "submitted", "submitted", "revised", "under_negotiation"] as const)[i % 6],
       source: ["Referral", "Website", "Existing customer", "Exhibition"][i % 4], sortOrder: i,
       expectedCloseAt: new Date(Date.now() + ((i % 5) * 20 + 10) * DAY), createdAt: new Date(Date.now() - (i * 11 + 5) * DAY), updatedAt: new Date(Date.now() - i * DAY),
     });

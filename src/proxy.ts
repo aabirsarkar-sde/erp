@@ -6,9 +6,9 @@ import { editionHasCrm, editionHasHd } from "@/lib/core/edition";
 const PUBLIC = /^\/(login|complaint|feedback|api\/cron|api\/inbound-email|api\/calendar|manifest\.webmanifest|brand-icon\.svg|favicon\.ico)(\/|$|\?)/;
 // routes that belong to one product only — the other deployment answers 404
 const HD_ONLY = /^\/(tickets|helpdesk|plants|reports|complaint|feedback|api\/cron\/escalate|api\/inbound-email|api\/tickets|api\/export\/(tickets|helpdesk)|print\/(tickets|helpdesk))(\/|$)/;
-const CRM_ONLY = /^\/(crm|activities|quotations|sales-reports|calendar\/activity|api\/export\/sales|print\/(sales|quotations))(\/|$)/;
+const CRM_ONLY = /^\/(crm|activities|quotations|sales-reports|daily-report|calendar\/activity|api\/cron\/daily-report|api\/export\/sales|print\/(sales|quotations))(\/|$)/;
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
   if ((!editionHasHd && HD_ONLY.test(path)) || (!editionHasCrm && CRM_ONLY.test(path))) {
     return new NextResponse("Not found", { status: 404 });

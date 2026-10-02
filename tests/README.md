@@ -24,6 +24,7 @@ npm run test:e2e                         # in another
 |---|---|---|
 | `crm-and-access.e2e.mjs` | combined (`APP_EDITION` unset) | access rules, helpdesk form/stages, leads → opportunities, proposals, visit reports, sales reports |
 | `helpdesk.e2e.mjs` | combined or helpdesk | complaint flow, transfer, email chain, signature + TAT, dashboard, exports, public portal, cron |
+| `crm-workflow.e2e.mjs` | combined or CRM | labels, contact reminders, day counter / TAT, kanban grouping & value sort, quick add, calendar planner / work done / diary, daily report + cron, tasks, dashboards |
 | `editions.e2e.mjs <crm\|helpdesk>` | that edition, its own seeded DB | product separation, branding, blocked routes |
 
 Reseed between runs (`npm run db:seed`). Screenshots go to `tests/e2e/.out/`.

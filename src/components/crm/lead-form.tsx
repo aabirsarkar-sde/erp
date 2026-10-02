@@ -45,6 +45,7 @@ export function NewLeadForm({ customers, users, stages, meId, defaultCustomer, p
           <Field label="Phone"><input name="phone" type="tel" className="input" /></Field>
           <Field label="Email"><input name="email" type="email" className="input" /></Field>
           <Field label="City / location"><input name="city" className="input" /></Field>
+          <Field label="Address" className="sm:col-span-2"><input name="address" className="input" placeholder="Plant / office address" /></Field>
           <Field label="Capacity"><input name="capacity" className="input" placeholder="e.g. 450 KLD" /></Field>
           <Field label="Source">
             <select name="source" className="input" defaultValue=""><option value="">—</option>{LEAD_SOURCES.map((s) => <option key={s}>{s}</option>)}</select>

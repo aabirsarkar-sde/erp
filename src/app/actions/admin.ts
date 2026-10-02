@@ -92,6 +92,14 @@ export async function setHoEmails(fd: FormData) {
   done();
 }
 
+export async function setDailyReportTo(fd: FormData) {
+  await requireAdmin();
+  const { settings } = await import("@/db");
+  const v = String(fd.get("to") ?? "").split(/[,;\s]+/).map((x) => x.trim().toLowerCase()).filter((x) => /@/.test(x)).join(", ");
+  await db.insert(settings).values({ key: "daily_report_to", value: v }).onConflictDoUpdate({ target: settings.key, set: { value: v } });
+  done();
+}
+
 export async function saveCanned(id: number | null, fd: FormData) {
   await requireAdmin();
   const { cannedResponses } = await import("@/db");

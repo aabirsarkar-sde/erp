@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/core/auth";
 import { requireDept } from "@/lib/core/access";
-import { salesReport } from "@/lib/crm/sales-stats";
+import { salesReport, groupPipeline, DIMENSIONS, type Dimension } from "@/lib/crm/sales-stats";
+import { getTagDefs } from "@/lib/crm/tags";
 import { lookups } from "@/lib/core/lookups";
 import { PageHeader } from "@/components/ui/ui";
 import { ParamSelect } from "@/components/ui/url-filters";
@@ -12,14 +13,23 @@ import { inr, inrShort, fmtDateTime } from "@/lib/core/format";
 export const metadata = { title: "Sales reports" };
 export const dynamic = "force-dynamic";
 
-const TABS = [["overview", "Overview"], ["salesperson", "By salesperson"], ["visits", "Visit report"], ["won", "Won / lost"]] as const;
+const TABS = [["overview", "Overview"], ["views", "Dashboards"], ["salesperson", "By salesperson"], ["visits", "Visit report"], ["won", "Won / lost"]] as const;
 
 export default async function SalesReports({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const me = await requireUser();
   requireDept(me, "crm");
   const sp = await searchParams;
   const tab = TABS.find(([k]) => k === sp.tab)?.[0] ?? "overview";
-  const [r, lk] = await Promise.all([salesReport(sp, me), lookups()]);
+  const [r, lk, defs] = await Promise.all([salesReport(sp, me), lookups(), getTagDefs()]);
+  const dim = (DIMENSIONS.find(([k]) => k === sp.by)?.[0] ?? "owner") as Dimension;
+  const grouped = tab === "views" ? groupPipeline(r, dim, defs) : [];
+  const drill = (label: string) => {
+    const base = "/crm?view=list&owner=all&status=all";
+    if (dim === "owner") { const u = lk.users.find((x) => x.name === label); return u ? `/crm?view=list&status=all&owner=${u.id}` : base; }
+    if (dim === "product") return `${base}&product=${encodeURIComponent(label)}`;
+    if (dim === "geography" || dim === "temperature" || dim === "label") return `${base}&tag=${encodeURIComponent(label)}`;
+    return `${base}&q=${encodeURIComponent(label)}`;
+  };
   const qs = (extra: Record<string, string>) => `?${new URLSearchParams({ ...(Object.fromEntries(Object.entries(sp).filter(([, v]) => v)) as Record<string, string>), ...extra })}`;
   const t = r.totals;
   const th = "px-3 py-2.5", td = "px-3 py-2";
@@ -32,8 +42,8 @@ export default async function SalesReports({ searchParams }: { searchParams: Pro
         <ParamSelect name="days" fallback="90" options={[["30", "Last 30 days"], ["90", "Last 90 days"], ["180", "Last 6 months"], ["365", "Last year"], ["all", "All time"]]} />
         {me.crmAccess === "all" && <ParamSelect name="user" fallback="all" options={[["all", "All salespeople"], ...lk.users.map((u) => [String(u.id), u.name] as [string, string])]} />}
       </div>
-      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
-        {[["New leads", t.newLeads], ["Converted", t.converted], ["Open opps", t.openN], ["Pipeline", inrShort(t.openValue)], [`Won (${t.wonN})`, inrShort(t.wonValue)], ["Lost", t.lostN], ["Win rate", t.winRate != null ? `${t.winRate.toFixed(0)}%` : "—"], ["Visits", t.visits]].map(([k, v]) => (
+      <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5 xl:grid-cols-10">
+        {[["New leads", t.newLeads], ["Converted", t.converted], ["Open opps", t.openN], ["Pipeline", inrShort(t.openValue)], [`Won (${t.wonN})`, inrShort(t.wonValue)], ["Lost", t.lostN], ["Win rate", t.winRate != null ? `${t.winRate.toFixed(0)}%` : "—"], ["Order TAT", t.winTat != null ? `${Math.round(t.winTat)} days` : "—"], ["Avg open age", t.openAge != null ? `${Math.round(t.openAge)} days` : "—"], ["Visits", t.visits]].map(([k, v]) => (
           <div key={k} className="card p-3"><div className="text-[11px] text-slate-500">{k}</div><div className="mt-0.5 truncate text-lg font-semibold tabular-nums">{v}</div></div>
         ))}
       </div>
@@ -63,6 +73,38 @@ export default async function SalesReports({ searchParams }: { searchParams: Pro
             <h2 className="mb-2 text-sm font-semibold">Why we lose</h2>
             {r.lostReasons.length ? <BarChart horizontal data={r.lostReasons.map((s) => ({ label: s.label, value: s.n }))} color="#e05252" valueLabel="Lost" /> : <p className="text-sm text-slate-500">Nothing lost in this period.</p>}
           </section>
+        </div>
+      )}
+
+      {tab === "views" && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-1.5">
+            {DIMENSIONS.map(([k, l]) => <Link key={k} href={qs({ tab: "views", by: k })} className={`rounded-full px-3 py-1 text-sm font-medium ring-1 ring-inset ${dim === k ? "bg-brand-600 text-white ring-brand-600" : "bg-white text-slate-600 ring-slate-300 hover:bg-slate-50"}`}>{l}</Link>)}
+          </div>
+          {grouped.length === 0 ? <p className="card p-6 text-center text-sm text-slate-500">Nothing to show.</p> : (
+            <>
+              <section className="card p-4">
+                <h2 className="mb-2 text-sm font-semibold">Open pipeline by {DIMENSIONS.find(([k]) => k === dim)![1].toLowerCase()}</h2>
+                <BarChart horizontal data={grouped.filter((g) => g.value).slice(0, 15).map((g) => ({ label: g.label, value: g.value, href: drill(g.label) }))} format="inr" valueLabel="Open value" />
+              </section>
+              <div className="card overflow-x-auto">
+                <table className="w-full min-w-[860px] text-sm tabular-nums">
+                  <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500"><tr>
+                    <th className={th}>{DIMENSIONS.find(([k]) => k === dim)![1]}</th><th className={`${th} text-right`}>Open</th><th className={`${th} text-right`}>Open value</th><th className={`${th} text-right`}>Weighted</th><th className={`${th} text-right`}>Avg age</th><th className={`${th} text-right`}>Won</th><th className={`${th} text-right`}>Won value</th><th className={`${th} text-right`}>Order TAT</th><th className={`${th} text-right`}>Lost</th>
+                  </tr></thead>
+                  <tbody className="divide-y divide-slate-100">{grouped.map((g) => (
+                    <tr key={g.label} className="hover:bg-slate-50">
+                      <td className={td}><Link href={drill(g.label)} className="font-medium hover:text-brand-700 hover:underline">{g.label}</Link></td>
+                      <td className={`${td} text-right`}>{g.open}</td><td className={`${td} text-right font-semibold`}>{inr(g.value)}</td><td className={`${td} text-right text-slate-500`}>{inr(g.weighted)}</td>
+                      <td className={`${td} text-right`}>{g.avgAge != null ? `${Math.round(g.avgAge)}d` : "—"}</td>
+                      <td className={`${td} text-right`}>{g.won}</td><td className={`${td} text-right`}>{inr(g.wonValue)}</td><td className={`${td} text-right`}>{g.avgTat != null ? `${Math.round(g.avgTat)}d` : "—"}</td><td className={`${td} text-right`}>{g.lost}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              <p className="text-xs text-slate-500">Open value is the current pipeline; won, lost and order TAT (days from creating the opportunity to the order) are for the selected period. An opportunity with two labels in the same view counts under both.</p>
+            </>
+          )}
         </div>
       )}
 

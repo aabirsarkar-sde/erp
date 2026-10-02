@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.0 — 3 Oct 2026
+
+Manager's CRM requests:
+- Opportunity labels with groups and colours (geography, customer type, product, Hot/Warm/Cold, auto "OR FY…" on win).
+- Contact details card with highlighted gaps and an automatic reminder until filled.
+- Day counter on every opportunity; order turnaround (creation → won) on opportunities, lists and reports.
+- Kanban grouping by stage / salesperson / product / geography / temperature; sort by value; quick add.
+- Calendar Day view: planner, work done and diary with a short entry form linked to customer and opportunity.
+- Daily report page and 7:30 pm email to managers.
+- Tasks module (both products): assign, due dates, kanban, supervisor view, email notifications, on opportunity/ticket pages.
+- Sales dashboards by salesperson, product, geography, temperature, stage, customer, source, label.
+- Outlook feed shows timed activities at their time.
+
+Platform: upgraded to Next.js 16 (fixes buttons occasionally staying on "Saving…" after a save), `middleware.ts` → `proxy.ts`,
+ESLint flat config from Next 16, WAL mode for the local database.
+
 ## 1.1.0 — 2 Oct 2026
 
 - **Faster:** every page now loads its data in a single database round trip, shows a loading skeleton

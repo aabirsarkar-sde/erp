@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 import { db, events, eventAttendees, activities, tickets, plants } from "@/db";
 import { requireUser } from "@/lib/core/auth";
 import { activityScope, ticketScope } from "@/lib/core/access";
@@ -14,6 +14,7 @@ import { ACTIVITY_META } from "@/lib/crm/meta";
 import { typeMeta, ticketRef } from "@/lib/helpdesk/constants";
 import { fmtTat } from "@/lib/core/format";
 import { appUrl } from "@/lib/core/mail";
+import { DayView } from "./day-view";
 import { DAY_MS, fromLocalInput, localDateKey, localParts, startOfLocalMonth, startOfLocalWeek, fmtTime } from "@/lib/core/tz";
 
 export const metadata = { title: "Calendar" };
@@ -31,6 +32,9 @@ const timed = (a: Act) => { if (!a.dueAt) return false; const p = localParts(a.d
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const me = await requireUser();
   const sp = await searchParams;
+  // Sales people live in the Day view (planner · work done · diary); others start on the week
+  const defView = me.crmAccess !== "none" && me.hdAccess === "none" ? "day" : "week";
+  if ((sp.view ?? defView) === "day" && me.crmAccess !== "none") return <DayView me={me} sp={sp} />;
   const view = sp.view === "month" ? "month" : "week";
   const anchor = (sp.date && fromLocalInput(sp.date)) || new Date();
   const from = view === "week" ? startOfLocalWeek(anchor) : startOfLocalWeek(startOfLocalMonth(anchor));
@@ -45,7 +49,9 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const [lk, evs, acts, token, tks] = await Promise.all([
     lookups(),
     db.select().from(events).where(and(lt(events.startAt, to), gte(events.endAt, from), mine ? inArray(events.id, mine) : undefined)),
-    db.select().from(activities).where(and(activityScope(me), gte(activities.dueAt, from), lt(activities.dueAt, to), who ? eq(activities.userId, who) : undefined)),
+    // planned items sit on their due time, finished ones on when they were done
+    db.select().from(activities).where(and(activityScope(me), or(and(isNull(activities.doneAt), gte(activities.dueAt, from), lt(activities.dueAt, to)), and(gte(activities.doneAt, from), lt(activities.doneAt, to))), who ? eq(activities.userId, who) : undefined))
+      .then((xs) => xs.map((x) => ({ ...x, dueAt: x.doneAt ?? x.dueAt }))),
     getOrCreateCalendarToken(me.id),
     db.select({ id: tickets.id, category: tickets.category, stage: tickets.stage, tat: tickets.tatMinutes, at: tAt, plantNo: plants.plantNo, subject: tickets.subject })
       .from(tickets).leftJoin(plants, eq(plants.id, tickets.plantId))
@@ -53,7 +59,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   ]);
   const showEvents = show !== "tickets", showTickets = show !== "events";
   const hasCrm = me.crmAccess !== "none", hasHd = me.hdAccess !== "none";
-  const slotHref = (d: Date, h: number) => `${hasCrm ? "/calendar/activity" : "/calendar/new"}?start=${localDateKey(d)}T${String(h).padStart(2, "0")}:00`;
+  const slotHref = (d: Date, h: number) => (hasCrm ? `/calendar?view=day&date=${localDateKey(d)}&at=${String(h).padStart(2, "0")}:00` : `/calendar/new?start=${localDateKey(d)}T${String(h).padStart(2, "0")}:00`);
   type Tk = (typeof tks)[number];
   const tksOn = (d: Date) => (showTickets ? tks.filter((t) => localDateKey(Number(t.at) * 1000) === localDateKey(d)) : []);
   const TicketChip = ({ t }: { t: Tk }) => {
@@ -91,7 +97,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
           <Link href={nav(step)} className="rounded-md px-2.5 py-1 hover:bg-slate-100">›</Link>
         </div>
         <div className="flex rounded-lg border border-slate-300 bg-white p-0.5 text-sm">
-          {(["week", "month"] as const).map((v) => (
+          {(hasCrm ? (["day", "week", "month"] as const) : (["week", "month"] as const)).map((v) => (
             <Link key={v} href={`/calendar?${new URLSearchParams({ ...(sp as Record<string, string>), view: v })}`} className={`rounded-md px-3 py-1 capitalize ${view === v ? "bg-slate-100 font-medium" : "text-slate-500"}`}>{v}</Link>
           ))}
         </div>

@@ -14,7 +14,7 @@ async function login(email, pw = "raybon123", vp = { width: 1440, height: 900 })
   const ctx = await browser.newContext({ viewport: vp, acceptDownloads: true });
   const p = await ctx.newPage();
   // pages stream in behind a loading skeleton: let each navigation finish before reading the page
-  const goto = p.goto.bind(p); p.goto = async (...args) => { const r = await goto(...args); await p.waitForLoadState("networkidle").catch(() => {}); return r; };
+  const goto = p.goto.bind(p); p.goto = async (...args) => { const r = await goto(...args); await p.waitForLoadState("networkidle").catch(() => {}); await p.waitForTimeout(1000); return r; };
   p.on("pageerror", e => errs.push(email + ": " + e.message)); p.on("console", m => m.type() === "error" && !m.text().includes("404") && errs.push(email + ": " + m.text()));
   await p.goto(BASE + "/login"); await p.fill("input[name=email]", email); await p.fill("input[name=password]", pw); await p.click("button"); await p.waitForURL(BASE + "/");
   return { ctx, p };
@@ -76,7 +76,7 @@ const tid = a.p.url().split("/").pop();
 const props = await a.p.locator("select[name=stage]").locator("option").allTextContents();
 console.log("ticket", tid, "stage options:", props);
 ok("stages are New/In process/Awaiting/Done", JSON.stringify(props) === JSON.stringify(["New", "In process", "Awaiting", "Done"]));
-ok("assigned to Haridutt", (await a.p.locator("select[name=assigneeId]").locator("option:checked").textContent()) === "Haridutt Solanki");
+ok("assigned to Haridutt", (await a.p.locator("form:has(select[name=stage]) select[name=assigneeId]").locator("option:checked").textContent()) === "Haridutt Solanki");
 await a.p.screenshot({ path: `${OUT}/v7-ticket.png`, fullPage: true });
 await a.p.goto(BASE + "/tickets?view=board&stage=all");
 const cols = await a.p.locator(".snap-start .text-sm.font-semibold").allTextContents();

@@ -9,6 +9,12 @@ function createDb() {
     url: process.env.DATABASE_URL || "file:local.db",
     authToken: process.env.DATABASE_AUTH_TOKEN,
   });
+  // local SQLite file: WAL lets reads and writes overlap (several server workers share the file).
+  // Turso in production handles this itself.
+  if ((process.env.DATABASE_URL || "file:").startsWith("file:")) {
+    void client.execute("PRAGMA journal_mode=WAL").catch(() => {});
+    void client.execute("PRAGMA busy_timeout=5000").catch(() => {});
+  }
   return drizzle(client, { schema });
 }
 

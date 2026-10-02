@@ -9,7 +9,7 @@ import { Field } from "@/components/ui/ui";
 import { PRIORITIES } from "@/lib/helpdesk/constants";
 import { mailEnabled } from "@/lib/core/mail";
 import { aiConfig, aiEnabled } from "@/lib/ai/client";
-import { setAutoTriage, setHoEmails, saveCanned, deleteCanned } from "@/app/actions/admin";
+import { setAutoTriage, setHoEmails, saveCanned, deleteCanned, setDailyReportTo } from "@/app/actions/admin";
 import { getHoEmails } from "@/lib/helpdesk/notify";
 import { cannedResponses } from "@/db";
 import { db as _db, aiUsage, settings as settingsT } from "@/db";
@@ -17,6 +17,9 @@ import { eq, gte, sql } from "drizzle-orm";
 import { PageHeader, Avatar } from "@/components/ui/ui";
 import { NewUserForm } from "@/components/workspace/new-user-form";
 import { editionHasCrm, editionHasHd } from "@/lib/core/edition";
+import { getTagDefs } from "@/lib/crm/tags";
+import { saveTagDef, deleteTagDef } from "@/app/actions/crm";
+import { TAG_GROUP_LIST, TAG_COLORS, tagCls } from "@/lib/crm/meta";
 
 export const metadata = { title: "Settings" };
 
@@ -28,12 +31,14 @@ export default async function SettingsPage() {
     _db.query.settings.findFirst({ where: eq(settingsT.key, "ai_auto_triage") }),
   ]);
   const autoTriage = triageRow?.value !== "off";
-  const [ho, canned] = await Promise.all([getHoEmails(), _db.select().from(cannedResponses)]);
-  const [co, sla, us, ts] = await Promise.all([
+  const [ho, canned, reportToRow] = await Promise.all([getHoEmails(), _db.select().from(cannedResponses), _db.query.settings.findFirst({ where: eq(settingsT.key, "daily_report_to") })]);
+  const reportTo = reportToRow?.value ?? "";
+  const [co, sla, us, ts, labelDefs] = await Promise.all([
     getCompany(),
     getSla(),
     db.query.users.findMany({ orderBy: asc(users.name), columns: { passwordHash: false } }),
     db.query.teams.findMany({ orderBy: asc(teams.id), with: { members: true } }),
+    editionHasCrm ? getTagDefs() : Promise.resolve([]),
   ]);
 
   return (
@@ -140,6 +145,48 @@ export default async function SettingsPage() {
       </section>
 
       </>}
+      {editionHasCrm && (
+        <section className="card p-4 text-sm">
+          <h2 className="font-semibold">Daily sales report</h2>
+          <p className="mb-2 text-xs text-slate-500">Every evening at 7:30 pm the team&apos;s planner, work done and diary are emailed to these addresses (blank = all admins). Needs email (SMTP) and CRON_SECRET set up.</p>
+          <form action={setDailyReportTo} className="flex gap-2">
+            <input name="to" defaultValue={reportTo} placeholder="chandan@raybonchemicals.com" className="input" />
+            <button className="btn-primary">Save</button>
+          </form>
+        </section>
+      )}
+
+      {editionHasCrm && (
+        <section className="card">
+          <div className="border-b border-slate-100 px-4 py-3">
+            <h2 className="font-semibold">Opportunity labels</h2>
+            <p className="text-xs text-slate-500">Salespeople can create labels on the fly; here you give them a group (used for “Group by geography / temperature” and dashboards) and a colour. “OR FY…” is added automatically when an opportunity is won.</p>
+          </div>
+          <div className="space-y-3 p-4">
+            {TAG_GROUP_LIST.map((g) => {
+              const xs = labelDefs.filter((d) => d.group === g);
+              return (
+                <div key={g} className="flex flex-wrap items-center gap-1.5">
+                  <span className="w-24 text-xs font-semibold uppercase tracking-wide text-slate-400">{g}</span>
+                  {xs.length === 0 && <span className="text-xs text-slate-400">—</span>}
+                  {xs.map((d) => (
+                    <form key={d.name} action={deleteTagDef.bind(null, d.name)} className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${tagCls(d.name, labelDefs)}`}>
+                      {d.name}<button className="opacity-40 hover:opacity-100" title="Remove label definition">×</button>
+                    </form>
+                  ))}
+                </div>
+              );
+            })}
+            <form action={saveTagDef} className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+              <input name="name" required placeholder="Label, e.g. Bharuch or Big ticket" className="input w-56 py-1.5" />
+              <select name="group" className="input w-36 py-1.5">{TAG_GROUP_LIST.map((g) => <option key={g}>{g}</option>)}</select>
+              <select name="color" className="input w-32 py-1.5" defaultValue=""><option value="">Group colour</option>{Object.keys(TAG_COLORS).map((c) => <option key={c} value={c}>{c}</option>)}</select>
+              <button className="btn-secondary py-1.5">Save label</button>
+            </form>
+          </div>
+        </section>
+      )}
+
       <section className="card">
         <div className="border-b border-slate-100 px-4 py-3">
           <h2 className="font-semibold">Company details</h2>

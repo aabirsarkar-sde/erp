@@ -17,7 +17,12 @@ import { AiLeadPanel } from "@/components/crm/ai-lead-panel";
 import { AiQuickLog } from "@/components/crm/ai-quick-log";
 import { aiEnabled } from "@/lib/ai/client";
 import { Stars } from "@/components/crm/pipeline-board";
-import { tagList } from "@/lib/crm/meta";
+import { tagList, ageTone, daysBetween } from "@/lib/crm/meta";
+import { TagEditor } from "@/components/crm/tag-editor";
+import { listTasks } from "@/lib/workspace/tasks";
+import { TaskList, TaskForm } from "@/components/workspace/tasks";
+import { ContactCard } from "@/components/crm/contact-card";
+import { tagSuggestions } from "@/lib/crm/tags";
 import { Avatar } from "@/components/ui/ui";
 import { IconBack, IconPlus } from "@/components/ui/icons";
 import { ACTIVITY_META, LOST_REASONS, PROPOSAL_META, quoteRef } from "@/lib/crm/meta";
@@ -32,7 +37,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const me = await requireUser();
   const id = Number((await params).id);
   if (!Number.isFinite(id)) notFound();
-  const [ok, l, stages, lk, docs, salesUsers] = await Promise.all([
+  const [ok, l, stages, lk, docs, salesUsers, tagDefsAll, tks] = await Promise.all([
     canSeeLead(me, id), // checked together with the data load — one round trip
     db.query.leads.findFirst({
       where: eq(leads.id, id),
@@ -50,8 +55,11 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     db.select({ id: documents.id, name: documents.name, size: documents.size, description: documents.description, createdAt: documents.createdAt, by: users.name })
       .from(documents).leftJoin(users, eq(users.id, documents.uploadedById)).where(eq(documents.leadId, id)).orderBy(desc(documents.createdAt)),
     db.select({ id: users.id, name: users.name }).from(users).where(ne(users.crmAccess, "none")).orderBy(asc(users.name)),
+    tagSuggestions(),
+    listTasks(me, { leadId: id }),
   ]);
   if (!ok || !l) notFound();
+  const age = daysBetween(l.createdAt, Date.now());
   const planned = l.activities.filter((a) => !a.doneAt);
   const done = l.activities.filter((a) => a.doneAt);
   const curIdx = stages.findIndex((s) => s.id === l.stageId);
@@ -76,9 +84,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               <span className={`rounded-full px-2 py-0.5 text-xs font-bold uppercase ${l.status === "won" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{l.status}{l.lostReason ? ` · ${l.lostReason}` : ""}</span>
             )}
             <Stars n={l.priority} />
-            {tagList(l.tags).map((t) => <span key={t} className="rounded bg-slate-100 px-1.5 py-0.5 text-xs text-slate-600">{t}</span>)}
+            {l.status === "open" ? (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ageTone(age)}`} title={`Created ${fmtDate(l.createdAt)}`}>Day {age}</span>
+            ) : l.closedAt && (
+              <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700" title="Turnaround from creation to closure">{l.status === "won" ? "Won" : "Closed"} in {daysBetween(l.createdAt, l.closedAt)} days</span>
+            )}
           </div>
           <h1 className="text-xl font-semibold tracking-tight sm:text-2xl">{l.title}</h1>
+          <div className="mt-1.5"><TagEditor leadId={l.id} tags={tagList(l.tags)} defs={tagDefsAll} /></div>
           <p className="mt-1 text-sm text-slate-500">
             {l.customer ? <Link href={`/customers/${l.customer.id}`} className="font-medium text-slate-700 hover:underline">{l.customer.name}</Link> : l.companyName ?? "No customer"}
             {l.contactName && ` · ${l.contactName}`}{l.city && ` · ${l.city}`}{l.capacity && ` · ${l.capacity}`}
@@ -127,6 +140,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
 
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          <ContactCard l={{ id: l.id, contactName: l.contactName, phone: l.phone, email: l.email, address: l.address, city: l.city }} />
           <section className="card">
             <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Planned activities ({planned.length})</h2>
             {planned.length > 0 && <ul className="divide-y divide-slate-100">{planned.map((a) => <ActivityItem key={a.id} a={{ ...a, userName: a.user?.name }} />)}</ul>}
@@ -134,6 +148,12 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             <div className="border-t border-slate-100 bg-slate-50/60 p-4">
               <ActivityForm leadId={l.id} users={lk.users} meId={me.id} />
             </div>
+          </section>
+
+          <section className="card">
+            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Tasks ({tks.filter((x) => x.status !== "done").length} open)</h2>
+            <TaskList tasks={tks} users={lk.users} />
+            <div className="border-t border-slate-100 bg-slate-50/60 p-3"><TaskForm users={lk.users} meId={me.id} leadId={l.id} compact /></div>
           </section>
 
           <section className="card">

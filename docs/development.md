@@ -25,6 +25,8 @@ Never commit straight to `main`; `main` deploys to the client.
 - Product-specific screens: check `src/lib/core/edition.ts` and the route lists in `src/middleware.ts`.
 - Dates: business time is IST. Use `src/lib/core/tz.ts`, never `new Date().setHours()` (servers run in UTC).
 - Load page data in one `Promise.all` (one database round trip).
+- ESLint shows React Compiler advisories as warnings (components defined inside render, `Date.now()` in render, …).
+  Fix them in files you touch; new code shouldn't add any.
 - Next.js gotchas: don't export plain helpers from `"use client"` files for server use; don't pass functions
   from server to client components; keep `userId`-taking helpers out of `"use server"` files (they become public).
 

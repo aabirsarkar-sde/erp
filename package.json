@@ -1,6 +1,6 @@
 {
   "name": "raybon-erp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/unit/*.test.ts",
-    "test:e2e": "node tests/e2e/crm-and-access.e2e.mjs && node tests/e2e/helpdesk.e2e.mjs",
+    "test:e2e": "node tests/e2e/crm-and-access.e2e.mjs && node tests/e2e/helpdesk.e2e.mjs && node tests/e2e/crm-workflow.e2e.mjs",
     "check": "npm run lint && npm run typecheck && npm test",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts --force",
@@ -24,7 +24,7 @@
     "drizzle-orm": "^0.45.3",
     "exceljs": "^4.4.0",
     "jose": "^6.2.12",
-    "next": "^15.5.26",
+    "next": "^16.3.8",
     "nodemailer": "^10.0.10",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
@@ -32,7 +32,6 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.7",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^26.6.2",
     "@types/nodemailer": "^8.0.2",
@@ -40,7 +39,7 @@
     "@types/react-dom": "^19.3.0",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^15.5.27",
+    "eslint-config-next": "^16.3.8",
     "playwright": "^1.63.0",
     "postcss": "^8.5.28",
     "tailwindcss": "^4.3.3",
@@ -48,6 +47,6 @@
     "typescript": "^5.9.3"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.9"
   }
 }

@@ -37,6 +37,34 @@ Lead → convert to Opportunity → activities / visits from the calendar → pr
   Reports appear in the opportunity history, the client's activity timeline and the visit report.
 - **Sales reports** (`/sales-reports`): pipeline by stage, by salesperson, lead sources, proposal status, lost reasons, won/lost and the visit report — Excel and PDF.
 
+## Sales CRM: day-to-day (Oct 2026 requests)
+
+- **Labels (Google Keep style):** click **+ Label** on an opportunity to add Geography, Customer (e.g. Big ticket customer),
+  Product, Temperature (Hot / Warm / Cold) or any new label on the fly. Groups and colours are set in Settings → Opportunity labels.
+  Winning an opportunity adds **OR FY26-27** (order received in that financial year) automatically.
+- **Contact details** card on every opportunity: contact person, phone, email, address. Anything missing is highlighted, and a
+  "Complete contact details" reminder is put on the salesperson's planner until it's filled in.
+- **Day counter:** every open opportunity shows how many days since it was created (amber after 45, red after 90).
+  Won opportunities show their **turnaround** (days from creation to order); reports show average order TAT.
+- **Kanban views:** group the board by stage, salesperson (drag to reassign), product, geography or Hot/Warm/Cold.
+  Column totals show count and ₹ value; sort by value (highest first) or age. **Quick add** creates an opportunity from five fields.
+- **Calendar = planner + work done + diary:** the Day view (default for salespeople) has a short form for planned work and for
+  work done (customer, type, one line, outcome). Picking a customer with one open opportunity links the entry to it, so it shows
+  in that opportunity's history. The diary is free notes for the day.
+- **Daily report:** compiled from each person's day (Sales → Daily report), flags anyone who didn't file, and is emailed every
+  evening at 7:30 pm to the addresses in Settings (default: admins).
+- **Dashboards:** Sales reports → Dashboards shows the pipeline by salesperson, product, geography, temperature, stage, customer,
+  source or any label: open value, weighted, average age, won value, order TAT. Click a row to open those opportunities.
+- **Outlook:** each person subscribes to their private calendar link (Calendar → Sync with Outlook). Planned activities appear
+  at their time; Outlook refreshes subscribed calendars every few hours.
+
+## Tasks (both products)
+
+Assign a task to anyone with a due date and priority, optionally linked to an opportunity or ticket. **Tasks** is a kanban
+(To do / In progress / Done): drag between columns or tick the box. The assignee is emailed; the person who assigned it is
+emailed when it's done. Supervisors (admins, managers, "all" access) can see everyone's tasks. Tasks due today appear in the
+calendar planner and on the dashboard.
+
 ## Departments & access (client spec, Oct 2026)
 
 Every user has three switches in **Settings → Users**:

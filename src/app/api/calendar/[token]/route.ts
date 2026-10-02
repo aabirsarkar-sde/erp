@@ -1,3 +1,4 @@
+import { localParts } from "@/lib/core/tz";
 import { and, eq, gte, isNull, inArray } from "drizzle-orm";
 import { db, calendarTokens, events, eventAttendees, activities, users } from "@/db";
 import { buildIcs, type IcsEvent } from "@/lib/workspace/ics";
@@ -5,6 +6,8 @@ import { appUrl } from "@/lib/core/mail";
 import { ACTIVITY_META } from "@/lib/crm/meta";
 
 // Private iCal feed: subscribe from Outlook / Google / Apple Calendar with this URL.
+const timed = (d: Date) => { const p = localParts(d); return p.h !== 0 || p.min !== 0; };
+
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {
   const token = (await params).token.replace(/\.ics$/, "");
   const t = await db.query.calendarTokens.findFirst({ where: eq(calendarTokens.token, token) });
@@ -22,9 +25,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ token: 
     ...acts.filter((a) => a.dueAt).map((a) => ({
       uid: `activity-${a.id}@raybon-erp`,
       title: `${ACTIVITY_META[a.type].label}: ${a.summary}${a.customer ? ` (${a.customer.name})` : ""}`,
-      start: a.dueAt!, end: a.dueAt!, allDay: true,
-      description: a.lead ? `Opportunity: ${a.lead.title}` : a.note,
-      url: a.lead ? `${appUrl()}/crm/${a.lead.id}` : `${appUrl()}/activities`,
+      // activities with a time show at that time in Outlook; date-only ones as all-day
+      ...(timed(a.dueAt!) ? { start: a.dueAt!, end: new Date(+a.dueAt! + (a.durationMin || 30) * 60_000), allDay: false } : { start: a.dueAt!, end: a.dueAt!, allDay: true }),
+      description: [a.lead ? `Opportunity: ${a.lead.title}` : null, a.note].filter(Boolean).join("\n") || null,
+      url: `${appUrl()}/activities/${a.id}`,
     })),
   ];
   return new Response(buildIcs(items, { name: `Raybon — ${u.name}` }), {

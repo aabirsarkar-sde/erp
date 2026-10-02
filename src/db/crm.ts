@@ -33,6 +33,7 @@ export const leads = sqliteTable(
     email: text("email"),
     phone: text("phone"),
     city: text("city"),
+    address: text("address"),
     capacity: text("capacity"), // e.g. "450 KLD"
     source: text("source"),
     expectedRevenue: integer("expected_revenue").notNull().default(0), // rupees
@@ -52,6 +53,16 @@ export const leads = sqliteTable(
   },
   (t) => [index("leads_stage").on(t.stageId, t.status), index("leads_owner").on(t.ownerId)],
 );
+
+// Labels for opportunities (Google Keep style): free names, optionally grouped and coloured.
+// leads.tags keeps the comma-separated names; this table only adds group + colour.
+export const TAG_GROUPS = ["Geography", "Customer", "Product", "Temperature", "Order", "Other"] as const;
+export const tagDefs = sqliteTable("tag_defs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+  group: text("group", { enum: TAG_GROUPS }).notNull().default("Other"),
+  color: text("color").notNull().default("slate"),
+});
 
 // followers / co-assigned users on an opportunity (they can see it even with "own" access)
 export const leadMembers = sqliteTable(
