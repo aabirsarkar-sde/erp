@@ -1,4 +1,4 @@
-import { DEFAULT_TERMS } from "../src/lib/quote-terms";
+import { DEFAULT_TERMS } from "../src/lib/crm/quote-terms";
 import { eq } from "drizzle-orm";
 import { db, customers, contacts, users, crmStages, leads, activities, leadNotes, products, quotations, quotationLines } from "../src/db";
 
@@ -135,4 +135,3 @@ export async function seedCrm() {
   console.log(`Seeded CRM: ${stages.length} stages, ${ls.length} leads, ${acts.length} activities, ${prods.length} products, ${Q.length} quotations.`);
 }
 
-export { DEFAULT_TERMS };

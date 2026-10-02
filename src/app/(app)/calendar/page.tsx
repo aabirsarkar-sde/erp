@@ -1,20 +1,20 @@
 import Link from "next/link";
 import { and, eq, gte, inArray, lt, sql } from "drizzle-orm";
 import { db, events, eventAttendees, activities, tickets, plants } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { activityScope, ticketScope } from "@/lib/access";
-import { lookups } from "@/lib/queries";
+import { requireUser } from "@/lib/core/auth";
+import { activityScope, ticketScope } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
 import { regenerateCalendarToken } from "@/app/actions/calendar";
-import { getOrCreateCalendarToken } from "@/lib/calendar";
-import { PageHeader, LinkButton } from "@/components/ui";
-import { ParamSelect } from "@/components/url-filters";
-import { CopyField } from "@/components/copy-field";
-import { IconPlus } from "@/components/icons";
-import { ACTIVITY_META } from "@/lib/crm";
-import { typeMeta, ticketRef } from "@/lib/constants";
-import { fmtTat } from "@/lib/format";
-import { appUrl } from "@/lib/mail";
-import { DAY_MS, fromLocalInput, localDateKey, localParts, startOfLocalDay, startOfLocalMonth, startOfLocalWeek, fmtTime } from "@/lib/tz";
+import { getOrCreateCalendarToken } from "@/lib/workspace/calendar";
+import { PageHeader, LinkButton } from "@/components/ui/ui";
+import { ParamSelect } from "@/components/ui/url-filters";
+import { CopyField } from "@/components/ui/copy-field";
+import { IconPlus } from "@/components/ui/icons";
+import { ACTIVITY_META } from "@/lib/crm/meta";
+import { typeMeta, ticketRef } from "@/lib/helpdesk/constants";
+import { fmtTat } from "@/lib/core/format";
+import { appUrl } from "@/lib/core/mail";
+import { DAY_MS, fromLocalInput, localDateKey, localParts, startOfLocalMonth, startOfLocalWeek, fmtTime } from "@/lib/core/tz";
 
 export const metadata = { title: "Calendar" };
 export const dynamic = "force-dynamic";
@@ -39,11 +39,11 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const canAll = me.crmAccess === "all" || me.hdAccess === "all" || me.role === "admin";
   const who = !canAll ? me.id : sp.who === "all" ? null : sp.who ? Number(sp.who) || me.id : me.id;
 
-  const lk = await lookups();
   const mine = who ? db.select({ id: eventAttendees.eventId }).from(eventAttendees).where(eq(eventAttendees.userId, who)) : null;
   const show = sp.show ?? "all";
   const tAt = sql<number>`coalesce(${tickets.reportedAt}, ${tickets.createdAt})`;
-  const [evs, acts, token, tks] = await Promise.all([
+  const [lk, evs, acts, token, tks] = await Promise.all([
+    lookups(),
     db.select().from(events).where(and(lt(events.startAt, to), gte(events.endAt, from), mine ? inArray(events.id, mine) : undefined)),
     db.select().from(activities).where(and(activityScope(me), gte(activities.dueAt, from), lt(activities.dueAt, to), who ? eq(activities.userId, who) : undefined)),
     getOrCreateCalendarToken(me.id),

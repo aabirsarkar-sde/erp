@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
-import { requireDept } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { helpdeskRows, groupBy, summary, type Group } from "@/lib/helpdesk-stats";
-import { PageHeader } from "@/components/ui";
-import { ParamSelect } from "@/components/url-filters";
-import { BarChart } from "@/components/charts";
-import { COMPLAINT_TYPES, TYPE_META } from "@/lib/constants";
-import { fmtTat } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { requireDept } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { helpdeskRows, groupBy, summary, type Group } from "@/lib/helpdesk/stats";
+import { PageHeader } from "@/components/ui/ui";
+import { ParamSelect } from "@/components/ui/url-filters";
+import { BarChart } from "@/components/ui/charts";
+import { COMPLAINT_TYPES, TYPE_META } from "@/lib/helpdesk/constants";
+import { fmtTat } from "@/lib/core/format";
 
 export const metadata = { title: "Helpdesk dashboard" };
 export const dynamic = "force-dynamic";

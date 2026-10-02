@@ -2,9 +2,9 @@
 import { headers } from "next/headers";
 import { and, eq, sql } from "drizzle-orm";
 import { db, tickets, plants, messages, ticketWatchers, contacts } from "@/db";
-import { getSla } from "@/lib/sla";
-import { ackNewTicket, autoWatchers, notifyNewTicket } from "@/lib/notify";
-import { COMPLAINT_TYPES, ticketRef } from "@/lib/constants";
+import { getSla } from "@/lib/helpdesk/sla";
+import { ackNewTicket, autoWatchers, notifyNewTicket } from "@/lib/helpdesk/notify";
+import { COMPLAINT_TYPES, ticketRef } from "@/lib/helpdesk/constants";
 
 // very small abuse guard for the public form
 const hits = new Map<string, number[]>();

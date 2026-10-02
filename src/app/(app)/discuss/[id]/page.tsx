@@ -2,11 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, users } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { listChannels, isMember, messagesSince } from "@/lib/chat";
+import { requireUser } from "@/lib/core/auth";
+import { listChannels, messagesSince } from "@/lib/workspace/chat";
 import { openDm, createChannel } from "@/app/actions/chat";
-import { ChatRoom } from "@/components/chat-room";
-import { Avatar } from "@/components/ui";
+import { ChatRoom } from "@/components/workspace/chat-room";
+import { Avatar } from "@/components/ui/ui";
 
 export const metadata = { title: "Discuss" };
 export const dynamic = "force-dynamic";
@@ -14,10 +14,11 @@ export const dynamic = "force-dynamic";
 export default async function DiscussPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireUser();
   const id = Number((await params).id);
-  const [cs, people] = await Promise.all([listChannels(me.id), db.select({ id: users.id, name: users.name }).from(users).where(eq(users.active, true))]);
+  // everything in one round trip; listChannels only returns channels this user may see,
+  // so the messages are only used once membership is confirmed below
+  const [cs, people, initial] = await Promise.all([listChannels(me.id), db.select({ id: users.id, name: users.name }).from(users).where(eq(users.active, true)), messagesSince(id, 0, 150)]);
   const cur = cs.find((c) => c.id === id);
-  if (!cur || !(await isMember(id, me.id))) notFound();
-  const initial = await messagesSince(id, 0, 150);
+  if (!cur) notFound();
   const pubs = cs.filter((c) => c.kind === "channel").sort((a, b) => a.name.localeCompare(b.name));
   const dms = cs.filter((c) => c.kind === "dm").sort((a, b) => Number(b.lastAt ?? 0) - Number(a.lastAt ?? 0));
   const dmWith = new Set(dms.map((d) => d.otherId));

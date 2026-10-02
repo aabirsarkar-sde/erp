@@ -1,12 +1,12 @@
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db, quotations, quotationLines } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { canSeeQuotation } from "@/lib/access";
-import { getCompany } from "@/lib/company";
-import { PrintButton } from "@/components/print-button";
-import { quoteRef } from "@/lib/crm";
-import { inr, fmtDate, amountInWords } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { canSeeQuotation } from "@/lib/core/access";
+import { getCompany } from "@/lib/core/company";
+import { PrintButton } from "@/components/ui/print-button";
+import { quoteRef } from "@/lib/crm/meta";
+import { inr, fmtDate, amountInWords } from "@/lib/core/format";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const q = await db.query.quotations.findFirst({ where: eq(quotations.id, Number((await params).id)), with: { customer: { columns: { name: true } } } });
@@ -31,7 +31,7 @@ export default async function PrintQuotation({ params }: { params: Promise<{ id:
       <article className="mx-auto max-w-[210mm] bg-white p-10 text-[12px] leading-relaxed text-slate-800 shadow print:max-w-none print:p-0 print:shadow-none">
         <header className="flex items-start justify-between gap-6 border-b-2 border-brand-600 pb-4">
           <div className="flex items-start gap-3">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
+            { }
             <img src="/brand-icon.svg" alt="" className="size-12" />
             <div>
               <div className="text-lg font-bold text-slate-900">{co.name}</div>

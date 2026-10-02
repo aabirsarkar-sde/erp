@@ -4,12 +4,12 @@ import { redirect } from "next/navigation";
 import { and, asc, eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, leads, leadNotes, activities, crmStages, customers, contacts, users, leadMembers, documents, ACTIVITY_TYPES, PROPOSAL_STATUS } from "@/db";
-import { saveFile, MAX_UPLOAD } from "@/lib/storage";
-import { PROPOSAL_META } from "@/lib/crm";
-import { requireUser } from "@/lib/auth";
-import { guardLead, hasCrm, activityScope } from "@/lib/access";
-import { inr } from "@/lib/format";
-import { fromLocalInput } from "@/lib/tz";
+import { saveFile, MAX_UPLOAD } from "@/lib/core/storage";
+import { PROPOSAL_META } from "@/lib/crm/meta";
+import { requireUser } from "@/lib/core/auth";
+import { guardLead, hasCrm, activityScope } from "@/lib/core/access";
+import { inr } from "@/lib/core/format";
+import { fromLocalInput } from "@/lib/core/tz";
 
 const optInt = z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nullable());
 const optStr = z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : null), z.string().nullable());

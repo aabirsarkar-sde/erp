@@ -1,0 +1,30 @@
+# Tests
+
+## Unit tests
+
+```bash
+npm test
+```
+
+Pure logic (time zone, formatting, quotation maths, CSV import, SLA). Uses Node's built-in test runner via `tsx`.
+
+## End-to-end tests
+
+Real browser scripts (Playwright) that click through the app. They change data, so run them against a
+**freshly seeded local database**, never production.
+
+```bash
+npx playwright install chromium          # once
+npm run setup                            # fresh sample data (combined app)
+npm run build && npm start               # in one terminal (port 3000)
+npm run test:e2e                         # in another
+```
+
+| Script | Build | Covers |
+|---|---|---|
+| `crm-and-access.e2e.mjs` | combined (`APP_EDITION` unset) | access rules, helpdesk form/stages, leads → opportunities, proposals, visit reports, sales reports |
+| `helpdesk.e2e.mjs` | combined or helpdesk | complaint flow, transfer, email chain, signature + TAT, dashboard, exports, public portal, cron |
+| `editions.e2e.mjs <crm\|helpdesk>` | that edition, its own seeded DB | product separation, branding, blocked routes |
+
+Reseed between runs (`npm run db:seed`). Screenshots go to `tests/e2e/.out/`.
+Options: `BASE_URL`, `CHROMIUM_PATH`, `INBOUND_EMAIL_SECRET`, `CRON_SECRET`.

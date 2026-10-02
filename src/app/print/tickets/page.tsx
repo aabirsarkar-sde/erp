@@ -1,8 +1,8 @@
-import { requireUser } from "@/lib/auth";
-import { listTickets } from "@/lib/queries";
-import { PrintShell } from "@/components/print-shell";
-import { STAGE_META, PRIORITIES, ticketRef } from "@/lib/constants";
-import { fmtDate, fmtTat } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { listTickets } from "@/lib/helpdesk/queries";
+import { PrintShell } from "@/components/ui/print-shell";
+import { STAGE_META, PRIORITIES, ticketRef } from "@/lib/helpdesk/constants";
+import { fmtDate, fmtTat } from "@/lib/core/format";
 
 export const metadata = { title: "Tickets report" };
 

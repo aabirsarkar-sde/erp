@@ -1,22 +1,22 @@
 import { asc } from "drizzle-orm";
 import { db, users, teams } from "@/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/core/auth";
 import { createTeam, toggleTeam, toggleMember, updateUser, updateSla } from "@/app/actions/admin";
-import { getSla } from "@/lib/sla";
-import { getCompany } from "@/lib/company";
+import { getSla } from "@/lib/helpdesk/sla";
+import { getCompany } from "@/lib/core/company";
 import { updateCompany } from "@/app/actions/quotations";
-import { Field } from "@/components/ui";
-import { PRIORITIES } from "@/lib/constants";
-import { mailEnabled } from "@/lib/mail";
-import { aiConfig, aiEnabled } from "@/lib/ai";
+import { Field } from "@/components/ui/ui";
+import { PRIORITIES } from "@/lib/helpdesk/constants";
+import { mailEnabled } from "@/lib/core/mail";
+import { aiConfig, aiEnabled } from "@/lib/ai/client";
 import { setAutoTriage, setHoEmails, saveCanned, deleteCanned } from "@/app/actions/admin";
-import { getHoEmails } from "@/lib/notify";
+import { getHoEmails } from "@/lib/helpdesk/notify";
 import { cannedResponses } from "@/db";
 import { db as _db, aiUsage, settings as settingsT } from "@/db";
 import { eq, gte, sql } from "drizzle-orm";
-import { PageHeader, Avatar } from "@/components/ui";
-import { NewUserForm } from "@/components/new-user-form";
-import { editionHasCrm, editionHasHd } from "@/lib/edition";
+import { PageHeader, Avatar } from "@/components/ui/ui";
+import { NewUserForm } from "@/components/workspace/new-user-form";
+import { editionHasCrm, editionHasHd } from "@/lib/core/edition";
 
 export const metadata = { title: "Settings" };
 

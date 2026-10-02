@@ -1,5 +1,5 @@
-import { getCurrentUser } from "@/lib/auth";
-import { isMember, messagesSince } from "@/lib/chat";
+import { getCurrentUser } from "@/lib/core/auth";
+import { isMember, messagesSince } from "@/lib/workspace/chat";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentUser();

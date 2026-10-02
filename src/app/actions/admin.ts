@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { db, users, teams, teamMembers } from "@/db";
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/core/auth";
 
 const s = (fd: FormData, k: string) => String(fd.get(k) ?? "").trim();
 const done = () => revalidatePath("/settings");
@@ -65,7 +65,7 @@ export async function updateUser(id: number, fd: FormData) {
 
 export async function updateSla(fd: FormData) {
   await requireAdmin();
-  const { saveSla } = await import("@/lib/sla");
+  const { saveSla } = await import("@/lib/helpdesk/sla");
   const n = (k: string, d: number) => {
     const v = Number(fd.get(k));
     return Number.isFinite(v) && v > 0 ? v : d;

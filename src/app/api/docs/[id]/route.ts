@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
 import { db, documents } from "@/db";
-import { getCurrentUser } from "@/lib/auth";
-import { readFileByKey } from "@/lib/storage";
-import { documentScope } from "@/lib/access";
+import { getCurrentUser } from "@/lib/core/auth";
+import { readFileByKey } from "@/lib/core/storage";
+import { documentScope } from "@/lib/core/access";
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentUser();

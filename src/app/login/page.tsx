@@ -1,5 +1,5 @@
-import { LoginForm } from "@/components/login-form";
-import { BRAND } from "@/lib/edition";
+import { LoginForm } from "@/components/ui/login-form";
+import { BRAND } from "@/lib/core/edition";
 
 export const metadata = { title: "Sign in" };
 

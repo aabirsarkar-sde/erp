@@ -2,12 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, events } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { lookups } from "@/lib/queries";
+import { requireUser } from "@/lib/core/auth";
+import { lookups } from "@/lib/core/lookups";
 import { updateEvent, deleteEvent } from "@/app/actions/calendar";
-import { EventForm } from "@/components/event-form";
-import { IconBack } from "@/components/icons";
-import { toLocalInput, localDateKey } from "@/lib/tz";
+import { EventForm } from "@/components/workspace/event-form";
+import { IconBack } from "@/components/ui/icons";
+import { toLocalInput, localDateKey } from "@/lib/core/tz";
 
 export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireUser();

@@ -2,7 +2,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db, plants } from "@/db";
-import { requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/core/auth";
 
 const s = (fd: FormData, k: string) => { const v = String(fd.get(k) ?? "").trim(); return v || null; };
 

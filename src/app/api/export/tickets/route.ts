@@ -1,8 +1,8 @@
-import { getCurrentUser } from "@/lib/auth";
-import { listTickets } from "@/lib/queries";
-import { addSheet, newWorkbook, xlsxResponse } from "@/lib/xlsx";
-import { PRIORITIES, STAGE_META, ticketRef } from "@/lib/constants";
-import { fmtTat } from "@/lib/format";
+import { getCurrentUser } from "@/lib/core/auth";
+import { listTickets } from "@/lib/helpdesk/queries";
+import { addSheet, newWorkbook, xlsxResponse } from "@/lib/core/xlsx";
+import { PRIORITIES, STAGE_META, ticketRef } from "@/lib/helpdesk/constants";
+import { fmtTat } from "@/lib/core/format";
 
 const d = (x: Date | null | undefined) => (x ? new Date(new Date(x).getTime() + 330 * 60_000).toISOString().replace("T", " ").slice(0, 16) : "");
 

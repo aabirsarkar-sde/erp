@@ -1,16 +1,17 @@
 "use server";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db, channels, channelMembers, chatMessages, users } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { isMember, messagesSince } from "@/lib/chat";
+import { requireUser } from "@/lib/core/auth";
+import { isMember, messagesSince } from "@/lib/workspace/chat";
 
 export async function sendChat(channelId: number, body: string, afterId: number) {
   const me = await requireUser();
   const text = body.trim().slice(0, 4000);
   if (!text || !(await isMember(channelId, me.id))) return { ok: false as const, messages: [] };
   const [m] = await db.insert(chatMessages).values({ channelId, authorId: me.id, body: text }).returning();
-  await db.update(channelMembers).set({ lastReadId: m!.id }).where(and(eq(channelMembers.channelId, channelId), eq(channelMembers.userId, me.id)));
+  await db.insert(channelMembers).values({ channelId, userId: me.id, lastReadId: m!.id })
+    .onConflictDoUpdate({ target: [channelMembers.channelId, channelMembers.userId], set: { lastReadId: m!.id } });
   return { ok: true as const, messages: await messagesSince(channelId, afterId) };
 }
 

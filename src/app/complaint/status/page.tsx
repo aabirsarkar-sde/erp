@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db, tickets } from "@/db";
-import { PublicShell } from "@/components/public-shell";
-import { STAGE_META } from "@/lib/constants";
-import { fmtDateTime, fmtTat } from "@/lib/format";
+import { PublicShell } from "@/components/ui/public-shell";
+import { STAGE_META } from "@/lib/helpdesk/constants";
+import { fmtDateTime, fmtTat } from "@/lib/core/format";
 
 export const metadata = { title: "Complaint status" };
 

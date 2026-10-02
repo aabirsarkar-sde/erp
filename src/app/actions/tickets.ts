@@ -2,16 +2,16 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
-import { fromLocalInput, localDateKey } from "@/lib/tz";
+import { fromLocalInput, localDateKey } from "@/lib/core/tz";
 import { z } from "zod";
 import { db, tickets, messages, teams, users, contacts, attachments, plants, ticketWatchers, teamMembers, STAGES } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { guardTicket, hdAll } from "@/lib/access";
-import { PRIORITIES, STAGE_META } from "@/lib/constants";
-import { saveFile, MAX_UPLOAD } from "@/lib/storage";
-import { getSla } from "@/lib/sla";
-import { notifyAssigned, emailReplyToCustomer, notifyNewTicket, autoWatchers, notifyClosed, notifyTransfer, emailTicket } from "@/lib/notify";
-import { fmtTat } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { guardTicket, hdAll } from "@/lib/core/access";
+import { PRIORITIES, STAGE_META } from "@/lib/helpdesk/constants";
+import { saveFile, MAX_UPLOAD } from "@/lib/core/storage";
+import { getSla } from "@/lib/helpdesk/sla";
+import { notifyAssigned, emailReplyToCustomer, notifyNewTicket, autoWatchers, notifyClosed, notifyTransfer, emailTicket } from "@/lib/helpdesk/notify";
+import { fmtTat } from "@/lib/core/format";
 
 const optInt = z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nullable());
 const optStr = z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : null), z.string().nullable());

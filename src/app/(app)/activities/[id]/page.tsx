@@ -2,14 +2,14 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, activities } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { canSeeActivity } from "@/lib/access";
+import { requireUser } from "@/lib/core/auth";
+import { canSeeActivity } from "@/lib/core/access";
 import { deleteActivity } from "@/app/actions/crm";
-import { ActivityReport } from "@/components/activity-report";
-import { ACTIVITY_META } from "@/lib/crm";
-import { fmtDateTime } from "@/lib/format";
-import { localDateKey } from "@/lib/tz";
-import { IconBack } from "@/components/icons";
+import { ActivityReport } from "@/components/crm/activity-report";
+import { ACTIVITY_META } from "@/lib/crm/meta";
+import { fmtDateTime } from "@/lib/core/format";
+import { localDateKey } from "@/lib/core/tz";
+import { IconBack } from "@/components/ui/icons";
 
 export const metadata = { title: "Activity" };
 

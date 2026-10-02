@@ -4,13 +4,13 @@ import { redirect } from "next/navigation";
 import { and, desc, eq, like } from "drizzle-orm";
 import { z } from "zod";
 import { db, quotations, quotationLines, leads, leadNotes, products, QUOTE_STATUS } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { quoteTotals } from "@/lib/quote-math";
-import { DEFAULT_TERMS } from "@/lib/quote-terms";
-import { saveCompany, type Company } from "@/lib/company";
-import { guardLead, canSeeQuotation, hasCrm } from "@/lib/access";
+import { requireUser } from "@/lib/core/auth";
+import { quoteTotals } from "@/lib/crm/quote-math";
+import { DEFAULT_TERMS } from "@/lib/crm/quote-terms";
+import { saveCompany, type Company } from "@/lib/core/company";
+import { guardLead, canSeeQuotation, hasCrm } from "@/lib/core/access";
 async function guardQuote(id: number) { const me = await requireUser(); if (!(await canSeeQuotation(me, id))) throw new Error("No access to this quotation."); return me; }
-import { requireAdmin } from "@/lib/auth";
+import { requireAdmin } from "@/lib/core/auth";
 
 async function nextNumber() {
   const rows = await db.select({ n: quotations.number }).from(quotations).where(like(quotations.number, "S%"));

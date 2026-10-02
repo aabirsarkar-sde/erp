@@ -1,9 +1,9 @@
 import Link from "next/link";
-import { requireAdmin } from "@/lib/auth";
-import { PageHeader } from "@/components/ui";
-import { Importer } from "@/components/importer";
-import { IconBack } from "@/components/icons";
-import { editionHasCrm, editionHasHd } from "@/lib/edition";
+import { requireAdmin } from "@/lib/core/auth";
+import { PageHeader } from "@/components/ui/ui";
+import { Importer } from "@/components/workspace/importer";
+import { IconBack } from "@/components/ui/icons";
+import { editionHasCrm, editionHasHd } from "@/lib/core/edition";
 
 export const metadata = { title: "Import from Odoo" };
 

@@ -1,9 +1,9 @@
 import { and, eq, inArray, isNull, lt, or } from "drizzle-orm";
 import { db, tickets, users, teamMembers } from "@/db";
-import { OPEN_STAGES, PRIORITIES, ticketRef } from "@/lib/constants";
-import { fmtTat } from "@/lib/format";
-import { sendMail, appUrl } from "@/lib/mail";
-import { getHoEmails } from "@/lib/notify";
+import { OPEN_STAGES, PRIORITIES, ticketRef } from "@/lib/helpdesk/constants";
+import { fmtTat } from "@/lib/core/format";
+import { sendMail, appUrl } from "@/lib/core/mail";
+import { getHoEmails } from "@/lib/helpdesk/notify";
 
 // Daily escalation digest (Vercel Cron → see vercel.json). Protected by CRON_SECRET.
 export async function GET(req: Request) {

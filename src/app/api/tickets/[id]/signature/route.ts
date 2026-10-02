@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { db, tickets } from "@/db";
-import { getCurrentUser } from "@/lib/auth";
-import { readFileByKey } from "@/lib/storage";
-import { canSeeTicket } from "@/lib/access";
+import { getCurrentUser } from "@/lib/core/auth";
+import { readFileByKey } from "@/lib/core/storage";
+import { canSeeTicket } from "@/lib/core/access";
 
 export async function GET(_r: Request, { params }: { params: Promise<{ id: string }> }) {
   const me = await getCurrentUser();

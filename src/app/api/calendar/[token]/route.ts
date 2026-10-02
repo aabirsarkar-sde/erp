@@ -1,8 +1,8 @@
 import { and, eq, gte, isNull, inArray } from "drizzle-orm";
 import { db, calendarTokens, events, eventAttendees, activities, users } from "@/db";
-import { buildIcs, type IcsEvent } from "@/lib/ics";
-import { appUrl } from "@/lib/mail";
-import { ACTIVITY_META } from "@/lib/crm";
+import { buildIcs, type IcsEvent } from "@/lib/workspace/ics";
+import { appUrl } from "@/lib/core/mail";
+import { ACTIVITY_META } from "@/lib/crm/meta";
 
 // Private iCal feed: subscribe from Outlook / Google / Apple Calendar with this URL.
 export async function GET(_req: Request, { params }: { params: Promise<{ token: string }> }) {

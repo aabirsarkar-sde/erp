@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
-import { requireDept } from "@/lib/access";
-import { listTickets, lookups, type TicketFilters as F, type TicketRow } from "@/lib/queries";
-import { TicketFilters } from "@/components/ticket-filters";
-import { PageHeader, StageBadge, PriorityFlag, Avatar, Empty, LinkButton } from "@/components/ui";
-import { STAGE_META, ticketRef, typeMeta } from "@/lib/constants";
-import { timeAgo, fmtTat, fmtDate } from "@/lib/format";
-import { STAGES } from "@/db/schema";
-import { IconPlus } from "@/components/icons";
+import { requireUser } from "@/lib/core/auth";
+import { requireDept } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { listTickets, type TicketFilters as F, type TicketRow } from "@/lib/helpdesk/queries";
+import { TicketFilters } from "@/components/helpdesk/ticket-filters";
+import { PageHeader, StageBadge, PriorityFlag, Avatar, Empty, LinkButton } from "@/components/ui/ui";
+import { STAGE_META, ticketRef, typeMeta } from "@/lib/helpdesk/constants";
+import { timeAgo, fmtTat, fmtDate } from "@/lib/core/format";
+import { IconPlus } from "@/components/ui/icons";
 
 export const metadata = { title: "Tickets" };
 

@@ -1,8 +1,8 @@
 import { asc } from "drizzle-orm";
 import { db, products } from "@/db";
-import { requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/core/auth";
 import { saveProduct, toggleProduct } from "@/app/actions/quotations";
-import { PageHeader } from "@/components/ui";
+import { PageHeader } from "@/components/ui/ui";
 
 export const metadata = { title: "Products" };
 

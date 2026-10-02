@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { asc, eq, like, or, sql } from "drizzle-orm";
+import { asc, like, or, sql } from "drizzle-orm";
 import { db, customers, tickets, leads } from "@/db";
-import { leadScope, ticketScope } from "@/lib/access";
-import { requireUser } from "@/lib/auth";
-import { PageHeader, LinkButton, Empty } from "@/components/ui";
-import { IconPlus, IconSearch } from "@/components/icons";
+import { leadScope, ticketScope } from "@/lib/core/access";
+import { requireUser } from "@/lib/core/auth";
+import { PageHeader, LinkButton, Empty } from "@/components/ui/ui";
+import { IconPlus, IconSearch } from "@/components/ui/icons";
 
 export const metadata = { title: "Customers" };
 

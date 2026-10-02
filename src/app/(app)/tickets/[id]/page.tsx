@@ -2,23 +2,23 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db, tickets, messages, users, cannedResponses } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { assertTicket } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { getSla } from "@/lib/sla";
-import { responseSla, TONE_CLS } from "@/lib/sla-status";
-import { AttachmentList } from "@/components/attachment-list";
-import { AiTicketPanel } from "@/components/ai-ticket-panel";
-import { aiEnabled } from "@/lib/ai";
+import { requireUser } from "@/lib/core/auth";
+import { canSeeTicket } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { getSla } from "@/lib/helpdesk/sla";
+import { responseSla, TONE_CLS } from "@/lib/helpdesk/sla-status";
+import { AttachmentList } from "@/components/helpdesk/attachment-list";
+import { AiTicketPanel } from "@/components/helpdesk/ai-ticket-panel";
+import { aiEnabled } from "@/lib/ai/client";
 import { assignToMe, setStage, addWatcher, removeWatcher } from "@/app/actions/tickets";
-import { TransferButton, EmailTicketButton, ResolveButton } from "@/components/ticket-actions";
-import { getHoEmails } from "@/lib/notify";
-import { StageBadge, PriorityFlag, Avatar } from "@/components/ui";
-import { TicketProps } from "@/components/ticket-props";
-import { Composer } from "@/components/composer";
-import { ticketRef, typeMeta } from "@/lib/constants";
-import { fmtDateTime, timeAgo, fmtTat } from "@/lib/format";
-import { IconBack } from "@/components/icons";
+import { TransferButton, EmailTicketButton, ResolveButton } from "@/components/helpdesk/ticket-actions";
+import { getHoEmails } from "@/lib/helpdesk/notify";
+import { StageBadge, PriorityFlag, Avatar } from "@/components/ui/ui";
+import { TicketProps } from "@/components/helpdesk/ticket-props";
+import { Composer } from "@/components/helpdesk/composer";
+import { ticketRef, typeMeta } from "@/lib/helpdesk/constants";
+import { fmtDateTime, fmtTat } from "@/lib/core/format";
+import { IconBack } from "@/components/ui/icons";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   return { title: ticketRef(Number((await params).id)) };
@@ -29,17 +29,17 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
   const me = await requireUser();
   const id = Number((await params).id);
   if (!Number.isFinite(id)) notFound();
-  await assertTicket(me, id);
-  if (!Number.isFinite(id)) notFound();
-  const [t, lk] = await Promise.all([
+  // access check and data load run together (one round trip); data is discarded if access fails
+  const [ok, t, lk, sla, ho, staff, canned] = await Promise.all([
+    canSeeTicket(me, id),
     db.query.tickets.findFirst({
       where: eq(tickets.id, id),
       with: { customer: true, contact: true, team: true, plant: true, watchers: true, closedBy: { columns: { name: true } }, assignee: { columns: { id: true, name: true } }, createdBy: { columns: { name: true } }, messages: { orderBy: asc(messages.createdAt), with: { author: { columns: { name: true } }, attachments: true } } },
     }),
     lookups(),
+    getSla(), getHoEmails(), db.select({ email: users.email }).from(users).where(eq(users.active, true)), db.select().from(cannedResponses),
   ]);
-  const [sla, ho, staff, canned] = await Promise.all([getSla(), getHoEmails(), db.select({ email: users.email }).from(users).where(eq(users.active, true)), db.select().from(cannedResponses)]);
-  if (!t) notFound();
+  if (!ok || !t) notFound();
   const mailSuggestions = [...new Set([...ho, t.complainantEmail, t.contact?.email, ...staff.map((u) => u.email)].filter((x): x is string => !!x))];
   const shownMessages = view === "mail" ? t.messages.filter((m) => m.kind === "inbound" || (m.kind === "reply" && m.emailedTo)) : t.messages;
   const slaState = responseSla(t, sla.response);
@@ -141,7 +141,7 @@ export default async function TicketPage({ params, searchParams }: { params: Pro
           {t.signatureKey && (
             <div className="card p-4 text-xs text-slate-500">
               <div className="mb-1 font-semibold text-slate-700">Customer sign-off</div>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
+              { }
               <img src={`/api/tickets/${t.id}/signature`} alt="Signature" className="h-20 w-full rounded border border-slate-200 bg-white object-contain" />
               {t.signedBy && <div className="mt-1">Signed by {t.signedBy}</div>}
             </div>

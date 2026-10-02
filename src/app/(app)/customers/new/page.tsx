@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/core/auth";
 import { createCustomer } from "@/app/actions/customers";
-import { PageHeader } from "@/components/ui";
-import { CustomerFields } from "@/components/customer-fields";
+import { PageHeader } from "@/components/ui/ui";
+import { CustomerFields } from "@/components/workspace/customer-fields";
 
 export const metadata = { title: "New customer" };
 

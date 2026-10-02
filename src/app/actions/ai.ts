@@ -1,12 +1,13 @@
 "use server";
+import { atLocal10 } from "@/lib/core/tz";
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { db, activities, leads, leadNotes, quotations, ACTIVITY_TYPES } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { guardTicket, guardLead, canSeeQuotation } from "@/lib/access";
-import { aiErrorMessage } from "@/lib/ai";
-import * as F from "@/lib/ai-features";
+import { requireUser } from "@/lib/core/auth";
+import { guardTicket, guardLead, canSeeQuotation } from "@/lib/core/access";
+import { aiErrorMessage } from "@/lib/ai/client";
+import * as F from "@/lib/ai/features";
 
 type R<T> = { ok: true; data: T } | { ok: false; error: string };
 async function wrap<T>(fn: () => Promise<T>): Promise<R<T>> {
@@ -60,7 +61,7 @@ export async function scheduleSuggested(leadId: number | null, customerId: numbe
   const me = await requireUser();
   const d = act.parse(a);
   if (leadId) await guardLead(me, leadId);
-  const due = new Date(); due.setDate(due.getDate() + d.dueInDays); due.setHours(10, 0, 0, 0);
+  const due = atLocal10(d.dueInDays);
   await db.insert(activities).values({ type: d.type, summary: d.summary, leadId, customerId, userId: me.id, createdById: me.id, dueAt: due });
   if (leadId) revalidatePath(`/crm/${leadId}`);
   revalidatePath("/activities");
@@ -75,7 +76,7 @@ export async function saveParsedLog(leadId: number | null, customerId: number | 
   if (leadId && !cust) cust = (await db.query.leads.findFirst({ where: eq(leads.id, leadId) }))?.customerId ?? null;
   await db.insert(activities).values({ type: d.type, summary: d.summary, outcome: d.outcome, note: rawNotes.slice(0, 2000), leadId, customerId: cust, userId: me.id, createdById: me.id, dueAt: new Date(), doneAt: new Date() });
   if (d.nextActivity) {
-    const due = new Date(); due.setDate(due.getDate() + d.nextActivity.dueInDays); due.setHours(10, 0, 0, 0);
+    const due = atLocal10(d.nextActivity.dueInDays);
     await db.insert(activities).values({ type: d.nextActivity.type, summary: d.nextActivity.summary, leadId, customerId: cust, userId: me.id, createdById: me.id, dueAt: due });
   }
   if (leadId) {
@@ -95,6 +96,6 @@ export async function saveParsedLog(leadId: number | null, customerId: number | 
 export async function aiAsk(history: { role: "user" | "assistant"; content: string }[]) {
   const me = await requireUser();
   const clean = history.filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string").map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
-  const { askAssistant } = await import("@/lib/ai-ask");
+  const { askAssistant } = await import("@/lib/ai/ask");
   return wrap(() => askAssistant(clean, me));
 }

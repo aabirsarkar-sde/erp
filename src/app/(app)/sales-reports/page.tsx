@@ -1,13 +1,13 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
-import { requireDept } from "@/lib/access";
-import { salesReport } from "@/lib/sales-stats";
-import { lookups } from "@/lib/queries";
-import { PageHeader } from "@/components/ui";
-import { ParamSelect } from "@/components/url-filters";
-import { BarChart } from "@/components/charts";
-import { ACTIVITY_META } from "@/lib/crm";
-import { inr, inrShort, fmtDateTime } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { requireDept } from "@/lib/core/access";
+import { salesReport } from "@/lib/crm/sales-stats";
+import { lookups } from "@/lib/core/lookups";
+import { PageHeader } from "@/components/ui/ui";
+import { ParamSelect } from "@/components/ui/url-filters";
+import { BarChart } from "@/components/ui/charts";
+import { ACTIVITY_META } from "@/lib/crm/meta";
+import { inr, inrShort, fmtDateTime } from "@/lib/core/format";
 
 export const metadata = { title: "Sales reports" };
 export const dynamic = "force-dynamic";

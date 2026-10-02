@@ -1,11 +1,11 @@
 "use server";
-import { BRAND, editionHasCrm, editionHasHd } from "@/lib/edition";
+import { BRAND, editionHasCrm, editionHasHd } from "@/lib/core/edition";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, users } from "@/db";
-import { SESSION_COOKIE, signSession } from "@/lib/session";
+import { SESSION_COOKIE, signSession } from "@/lib/core/session";
 
 export async function login(_prev: { error?: string } | undefined, fd: FormData) {
   const email = String(fd.get("email") || "").trim().toLowerCase();

@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
-import { requireDept } from "@/lib/access";
-import { listLeads } from "@/lib/crm-queries";
-import { lookups } from "@/lib/queries";
+import { requireUser } from "@/lib/core/auth";
+import { requireDept } from "@/lib/core/access";
+import { listLeads } from "@/lib/crm/queries";
+import { lookups } from "@/lib/core/lookups";
 import { convertToOpportunity } from "@/app/actions/crm";
-import { ActivityDot } from "@/components/pipeline-board";
-import { SearchBox, ParamSelect } from "@/components/url-filters";
-import { PageHeader, LinkButton, Empty, Avatar } from "@/components/ui";
-import { IconPlus } from "@/components/icons";
-import { LEAD_SOURCES } from "@/lib/crm";
-import { fmtDate } from "@/lib/format";
+import { ActivityDot } from "@/components/crm/pipeline-board";
+import { SearchBox, ParamSelect } from "@/components/ui/url-filters";
+import { PageHeader, LinkButton, Empty, Avatar } from "@/components/ui/ui";
+import { IconPlus } from "@/components/ui/icons";
+import { LEAD_SOURCES } from "@/lib/crm/meta";
+import { fmtDate } from "@/lib/core/format";
 
 export const metadata = { title: "Leads" };
 

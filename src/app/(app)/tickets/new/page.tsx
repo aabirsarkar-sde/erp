@@ -1,12 +1,12 @@
 import { asc, eq, ne } from "drizzle-orm";
 import { db, plants, customers, teams, teamMembers, users } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { requireDept, hdAll } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { PageHeader } from "@/components/ui";
-import { NewTicketForm } from "@/components/new-ticket-form";
-import { aiEnabled } from "@/lib/ai";
-import { localDateKey } from "@/lib/tz";
+import { requireUser } from "@/lib/core/auth";
+import { requireDept, hdAll } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { PageHeader } from "@/components/ui/ui";
+import { NewTicketForm } from "@/components/helpdesk/new-ticket-form";
+import { aiEnabled } from "@/lib/ai/client";
+import { localDateKey } from "@/lib/core/tz";
 
 export const metadata = { title: "New complaint" };
 

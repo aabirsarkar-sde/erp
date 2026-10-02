@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
-import { requireDept } from "@/lib/access";
-import { listLeads, getStages, wonThisMonth } from "@/lib/crm-queries";
-import { lookups } from "@/lib/queries";
-import { PipelineBoard, Stars, ActivityDot } from "@/components/pipeline-board";
-import { tagList } from "@/lib/crm";
-import { SearchBox, ParamSelect, ParamToggle } from "@/components/url-filters";
-import { PageHeader, LinkButton, Empty, Avatar } from "@/components/ui";
-import { IconPlus, IconList, IconBoard } from "@/components/icons";
-import { inr, inrShort } from "@/lib/format";
-import { stageColor, PROPOSAL_META } from "@/lib/crm";
+import { requireUser } from "@/lib/core/auth";
+import { requireDept } from "@/lib/core/access";
+import { listLeads, getStages, wonThisMonth } from "@/lib/crm/queries";
+import { lookups } from "@/lib/core/lookups";
+import { PipelineBoard, Stars, ActivityDot } from "@/components/crm/pipeline-board";
+import { tagList } from "@/lib/crm/meta";
+import { SearchBox, ParamSelect, ParamToggle } from "@/components/ui/url-filters";
+import { PageHeader, LinkButton, Empty, Avatar } from "@/components/ui/ui";
+import { IconPlus, IconList, IconBoard } from "@/components/ui/icons";
+import { inr, inrShort } from "@/lib/core/format";
+import { stageColor, PROPOSAL_META } from "@/lib/crm/meta";
 
 export const metadata = { title: "Pipeline" };
 

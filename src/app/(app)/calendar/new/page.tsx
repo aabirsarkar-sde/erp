@@ -1,9 +1,9 @@
-import { requireUser } from "@/lib/auth";
-import { lookups } from "@/lib/queries";
+import { requireUser } from "@/lib/core/auth";
+import { lookups } from "@/lib/core/lookups";
 import { createEvent } from "@/app/actions/calendar";
-import { EventForm } from "@/components/event-form";
-import { PageHeader } from "@/components/ui";
-import { fromLocalInput, toLocalInput } from "@/lib/tz";
+import { EventForm } from "@/components/workspace/event-form";
+import { PageHeader } from "@/components/ui/ui";
+import { fromLocalInput, toLocalInput } from "@/lib/core/tz";
 
 export const metadata = { title: "New event" };
 

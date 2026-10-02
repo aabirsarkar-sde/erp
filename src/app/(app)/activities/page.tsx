@@ -1,18 +1,19 @@
+import { startOfLocalDay } from "@/lib/core/tz";
 import Link from "next/link";
 import { and, asc, desc, eq, gte, isNotNull, isNull } from "drizzle-orm";
 import { db, activities, ACTIVITY_TYPES } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { requireDept } from "@/lib/access";
-import { activityScope } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { PageHeader, Empty, Avatar } from "@/components/ui";
-import { ActivityItem } from "@/components/activity-item";
-import { ActivityForm } from "@/components/activity-form";
-import { AiQuickLog } from "@/components/ai-quick-log";
-import { aiEnabled } from "@/lib/ai";
-import { ParamSelect } from "@/components/url-filters";
-import { ACTIVITY_META } from "@/lib/crm";
-import { fmtDateTime } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { requireDept } from "@/lib/core/access";
+import { activityScope } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { PageHeader, Empty, Avatar } from "@/components/ui/ui";
+import { ActivityItem } from "@/components/crm/activity-item";
+import { ActivityForm } from "@/components/crm/activity-form";
+import { AiQuickLog } from "@/components/crm/ai-quick-log";
+import { aiEnabled } from "@/lib/ai/client";
+import { ParamSelect } from "@/components/ui/url-filters";
+import { ACTIVITY_META } from "@/lib/crm/meta";
+import { fmtDateTime } from "@/lib/core/format";
 
 export const metadata = { title: "Activities" };
 
@@ -22,9 +23,18 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
   const sp = await searchParams;
   const tab = sp.tab === "report" ? "report" : "todo";
   const who = sp.user === "all" ? undefined : sp.user ? Number(sp.user) || me.id : me.id;
-  const lk = await lookups();
+  const reportDays = Number(sp.days) || 30;
+  // the list for the chosen tab loads together with the people list (one round trip)
+  const [lk, rows] = await Promise.all([
+    lookups(),
+    tab === "report"
+      ? db.query.activities.findMany({
+          where: and(activityScope(me), isNotNull(activities.doneAt), gte(activities.doneAt, new Date(Date.now() - reportDays * 864e5)), who ? eq(activities.userId, who) : undefined, sp.type ? eq(activities.type, sp.type as (typeof ACTIVITY_TYPES)[number]) : undefined),
+          orderBy: desc(activities.doneAt), with: { lead: { columns: { id: true, title: true } }, customer: { columns: { name: true } }, user: { columns: { name: true } } }, limit: 500,
+        })
+      : db.query.activities.findMany({ where: and(activityScope(me), isNull(activities.doneAt), who ? eq(activities.userId, who) : undefined), orderBy: asc(activities.dueAt), with: { lead: { columns: { id: true, title: true } }, customer: { columns: { name: true } }, user: { columns: { name: true } } }, limit: 300 }),
+  ]);
   const userOpts: [string, string][] = [["me", "Me"], ["all", "Everyone"], ...lk.users.filter((u) => u.id !== me.id).map((u) => [String(u.id), u.name] as [string, string])];
-  const withRel = { lead: { columns: { id: true, title: true } }, customer: { columns: { name: true } }, user: { columns: { name: true } } } as const;
 
   const tabs = (
     <div className="mb-4 flex gap-1 border-b border-slate-200">
@@ -35,13 +45,6 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
   );
 
   if (tab === "report") {
-    const days = Number(sp.days) || 30;
-    const rows = await db.query.activities.findMany({
-      where: and(activityScope(me), isNotNull(activities.doneAt), gte(activities.doneAt, new Date(Date.now() - days * 864e5)), who ? eq(activities.userId, who) : undefined, sp.type ? eq(activities.type, sp.type as (typeof ACTIVITY_TYPES)[number]) : undefined),
-      orderBy: desc(activities.doneAt),
-      with: withRel,
-      limit: 500,
-    });
     const counts = ACTIVITY_TYPES.map((t) => [t, rows.filter((r) => r.type === t).length] as const);
     return (
       <div className="mx-auto max-w-6xl">
@@ -82,8 +85,8 @@ export default async function ActivitiesPage({ searchParams }: { searchParams: P
     );
   }
 
-  const open = await db.query.activities.findMany({ where: and(activityScope(me), isNull(activities.doneAt), who ? eq(activities.userId, who) : undefined), orderBy: asc(activities.dueAt), with: withRel, limit: 300 });
-  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const open = rows;
+  const today = startOfLocalDay(Date.now());
   const tomorrow = new Date(today.getTime() + 864e5);
   const groups = [
     ["Overdue", open.filter((a) => a.dueAt && a.dueAt < today)],

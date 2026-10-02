@@ -2,14 +2,14 @@ import Link from "next/link";
 import { and, desc, eq, like, or, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db, quotations, customers, users, QUOTE_STATUS } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { quotationScope, requireDept } from "@/lib/access";
-import { PageHeader, LinkButton, Empty, Avatar } from "@/components/ui";
-import { SearchBox, ParamSelect } from "@/components/url-filters";
-import { QuoteStatus } from "@/components/quote-status";
-import { IconPlus } from "@/components/icons";
-import { inr, fmtDate } from "@/lib/format";
-import { quoteRef } from "@/lib/crm";
+import { requireUser } from "@/lib/core/auth";
+import { quotationScope, requireDept } from "@/lib/core/access";
+import { PageHeader, LinkButton, Empty, Avatar } from "@/components/ui/ui";
+import { SearchBox, ParamSelect } from "@/components/ui/url-filters";
+import { QuoteStatus } from "@/components/crm/quote-status";
+import { IconPlus } from "@/components/ui/icons";
+import { inr, fmtDate } from "@/lib/core/format";
+import { quoteRef } from "@/lib/crm/meta";
 
 export const metadata = { title: "Quotations" };
 

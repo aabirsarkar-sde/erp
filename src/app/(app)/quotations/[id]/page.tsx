@@ -2,16 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db, quotations, quotationLines, products } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { canSeeQuotation } from "@/lib/access";
-import { lookups } from "@/lib/queries";
+import { requireUser } from "@/lib/core/auth";
+import { canSeeQuotation } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
 import { setQuoteStatus, reviseQuotation, deleteQuotation } from "@/app/actions/quotations";
-import { QuoteEditor } from "@/components/quote-editor";
-import { aiEnabled } from "@/lib/ai";
-import { QuoteStatus } from "@/components/quote-status";
-import { IconBack } from "@/components/icons";
-import { quoteRef } from "@/lib/crm";
-import { inr } from "@/lib/format";
+import { QuoteEditor } from "@/components/crm/quote-editor";
+import { aiEnabled } from "@/lib/ai/client";
+import { QuoteStatus } from "@/components/crm/quote-status";
+import { IconBack } from "@/components/ui/icons";
+import { quoteRef } from "@/lib/crm/meta";
+import { inr } from "@/lib/core/format";
 
 export default async function QuotationPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireUser();

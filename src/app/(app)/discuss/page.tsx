@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { requireUser } from "@/lib/auth";
-import { listChannels } from "@/lib/chat";
+import { requireUser } from "@/lib/core/auth";
+import { listChannels } from "@/lib/workspace/chat";
 
 export default async function DiscussIndex() {
   const me = await requireUser();

@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
-import { requireUser } from "@/lib/auth";
-import { salesReport } from "@/lib/sales-stats";
-import { PrintShell } from "@/components/print-shell";
-import { ACTIVITY_META } from "@/lib/crm";
-import { inr, inrShort, fmtDateTime } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { salesReport } from "@/lib/crm/sales-stats";
+import { PrintShell } from "@/components/ui/print-shell";
+import { ACTIVITY_META } from "@/lib/crm/meta";
+import { inr, inrShort, fmtDateTime } from "@/lib/core/format";
 
 export const metadata = { title: "Sales report" };
 

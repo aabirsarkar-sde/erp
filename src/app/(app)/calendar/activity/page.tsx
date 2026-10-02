@@ -1,11 +1,11 @@
 import { asc } from "drizzle-orm";
 import { db, contacts, leads } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { leadScope, requireDept } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { ActivityPlanner } from "@/components/activity-planner";
-import { PageHeader } from "@/components/ui";
-import { fromLocalInput, toLocalInput } from "@/lib/tz";
+import { requireUser } from "@/lib/core/auth";
+import { leadScope, requireDept } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { ActivityPlanner } from "@/components/crm/activity-planner";
+import { PageHeader } from "@/components/ui/ui";
+import { fromLocalInput, toLocalInput } from "@/lib/core/tz";
 
 export const metadata = { title: "New activity" };
 

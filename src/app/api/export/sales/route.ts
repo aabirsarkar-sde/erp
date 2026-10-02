@@ -1,8 +1,8 @@
-import { getCurrentUser } from "@/lib/auth";
-import { salesReport } from "@/lib/sales-stats";
-import { addSheet, newWorkbook, xlsxResponse } from "@/lib/xlsx";
-import { ACTIVITY_META, PROPOSAL_META } from "@/lib/crm";
-import { fmtDateTime, fmtDate } from "@/lib/format";
+import { getCurrentUser } from "@/lib/core/auth";
+import { salesReport } from "@/lib/crm/sales-stats";
+import { addSheet, newWorkbook, xlsxResponse } from "@/lib/core/xlsx";
+import { ACTIVITY_META, PROPOSAL_META } from "@/lib/crm/meta";
+import { fmtDateTime, fmtDate } from "@/lib/core/format";
 
 export async function GET(req: Request) {
   const me = await getCurrentUser();

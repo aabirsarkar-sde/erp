@@ -1,10 +1,10 @@
 "use server";
-import { editionHasCrm, editionHasHd } from "@/lib/edition";
+import { editionHasCrm, editionHasHd } from "@/lib/core/edition";
 import { revalidatePath } from "next/cache";
 import { and, eq, like, sql } from "drizzle-orm";
 import { db, customers, contacts, leads, crmStages, users, tickets, teams, messages, plants } from "@/db";
-import { requireAdmin } from "@/lib/auth";
-import type { ImportKind } from "@/lib/csv";
+import { requireAdmin } from "@/lib/core/auth";
+import type { ImportKind } from "@/lib/core/csv";
 
 type Row = Record<string, string>;
 export type ImportResult = { created: number; updated: number; skipped: number; errors: string[] };

@@ -3,7 +3,7 @@ import bcrypt from "bcryptjs";
 import { db, plants, ticketWatchers, cannedResponses, aiUsage, events, eventAttendees, calendarTokens, channels, channelMembers, chatMessages, docFolders, documents, users, teams, teamMembers, customers, contacts, tickets, messages, attachments, settings, quotationLines, quotations, products, leadNotes, activities, leads, crmStages } from "../src/db";
 import { sql } from "drizzle-orm";
 import { seedCrm } from "./seed-crm";
-import { BRAND, editionHasCrm, editionHasHd } from "../src/lib/edition";
+import { BRAND, editionHasCrm, editionHasHd } from "../src/lib/core/edition";
 
 async function main() {
   const existing = await db.select({ n: sql<number>`count(*)` }).from(users);
@@ -180,7 +180,7 @@ async function main() {
 main().then(() => process.exit(0)).catch((e) => { console.error(e); process.exit(1); });
 
 async function seedWorkspace() {
-  const { fromLocal, localParts, startOfLocalWeek } = await import("../src/lib/tz");
+  const { fromLocal, localParts, startOfLocalWeek } = await import("../src/lib/core/tz");
   const us = await db.select().from(users);
   const by = (e: string) => us.find((u) => u.email.startsWith(e))!;
   const aarti = by("aarti"), admin = by("admin");

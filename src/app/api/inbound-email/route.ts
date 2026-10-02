@@ -1,4 +1,4 @@
-import { handleInbound, type InboundEmail } from "@/lib/inbound";
+import { handleInbound, type InboundEmail } from "@/lib/helpdesk/inbound";
 import { revalidatePath } from "next/cache";
 
 // POST JSON { from, subject, text, attachments?: [{ filename, contentType, content(base64) }] }

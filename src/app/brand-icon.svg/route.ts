@@ -1,4 +1,4 @@
-import { EDITION } from "@/lib/edition";
+import { EDITION } from "@/lib/core/edition";
 
 // app icon: water drop for the helpdesk / combined app, a rising chart in a drop for the CRM
 export function GET() {

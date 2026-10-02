@@ -211,4 +211,4 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
   message: one(messages, { fields: [attachments.messageId], references: [messages.id] }),
 }));
 export * from "./crm";
-export * from "./p4";
+export * from "./workspace";

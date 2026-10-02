@@ -1,10 +1,10 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
-import { BRAND } from "@/lib/edition";
+import { requireUser } from "@/lib/core/auth";
+import { BRAND } from "@/lib/core/edition";
 import { logout } from "@/app/actions/auth";
-import { SideNav, BottomNav } from "@/components/nav";
-import { Avatar } from "@/components/ui";
-import { IconLogout, IconPlus, IconCog } from "@/components/icons";
+import { SideNav, BottomNav } from "@/components/ui/nav";
+import { Avatar } from "@/components/ui/ui";
+import { IconLogout, IconPlus, IconCog } from "@/components/ui/icons";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();

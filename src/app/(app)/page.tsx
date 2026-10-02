@@ -1,12 +1,13 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
-import { teamStats, myStats, listTickets } from "@/lib/queries";
-import { PageHeader, Stat, StageBadge, PriorityFlag, Avatar } from "@/components/ui";
-import { ticketRef } from "@/lib/constants";
-import { timeAgo, inrShort } from "@/lib/format";
-import { aiEnabled } from "@/lib/ai";
-import { Sparkle } from "@/components/ai-ui";
+import { requireUser } from "@/lib/core/auth";
+import { teamStats, myStats, listTickets } from "@/lib/helpdesk/queries";
+import { PageHeader, Stat, StageBadge, PriorityFlag, Avatar } from "@/components/ui/ui";
+import { ticketRef } from "@/lib/helpdesk/constants";
+import { timeAgo, inrShort } from "@/lib/core/format";
+import { aiEnabled } from "@/lib/ai/client";
+import { Sparkle } from "@/components/workspace/ai-ui";
 import { and, eq, isNull, lt, sql } from "drizzle-orm";
+import { DAY_MS, localParts, startOfLocalDay } from "@/lib/core/tz";
 import { db, activities, leads } from "@/db";
 
 export const dynamic = "force-dynamic";
@@ -14,14 +15,17 @@ export const dynamic = "force-dynamic";
 export default async function Dashboard() {
   const me = await requireUser();
   const hd = me.hdAccess !== "none", crm = me.crmAccess !== "none";
-  const [teams, mine, recent] = await Promise.all([teamStats(me), myStats(me), listTickets({ sort: "updated", stage: "all" }, me, 8)]);
-  const tomorrow = new Date(); tomorrow.setHours(24, 0, 0, 0);
-  const [[acts], [pipe]] = await Promise.all([
-    db.select({ n: sql<number>`count(*)`, late: sql<number>`coalesce(sum(case when ${activities.dueAt} < ${Math.floor(new Date().setHours(0, 0, 0, 0) / 1000)} then 1 else 0 end),0)` })
+  const today = startOfLocalDay(Date.now()), tomorrow = new Date(+today + DAY_MS); // IST, not the server's clock
+  // everything in one round trip; the other department's numbers aren't fetched at all
+  const [teams, mine, recent, [acts], [pipe]] = await Promise.all([
+    hd ? teamStats(me) : Promise.resolve([]),
+    hd ? myStats(me) : Promise.resolve({ mine: 0, unassigned: 0, unattended: 0, overdue: 0 }),
+    hd ? listTickets({ sort: "updated", stage: "all" }, me, 8) : Promise.resolve([]),
+    db.select({ n: sql<number>`count(*)`, late: sql<number>`coalesce(sum(case when ${activities.dueAt} < ${Math.floor(+today / 1000)} then 1 else 0 end),0)` })
       .from(activities).where(and(eq(activities.userId, me.id), isNull(activities.doneAt), lt(activities.dueAt, tomorrow))),
-    db.select({ n: sql<number>`count(*)`, v: sql<number>`coalesce(sum(${leads.expectedRevenue}),0)` }).from(leads).where(and(eq(leads.ownerId, me.id), eq(leads.status, "open"))),
+    crm ? db.select({ n: sql<number>`count(*)`, v: sql<number>`coalesce(sum(${leads.expectedRevenue}),0)` }).from(leads).where(and(eq(leads.ownerId, me.id), eq(leads.status, "open"))) : Promise.resolve([{ n: 0, v: 0 }]),
   ]);
-  const hour = new Date().getHours();
+  const hour = localParts(Date.now()).h;
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
   return (

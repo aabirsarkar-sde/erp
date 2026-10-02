@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { asc, eq, like, or, sql } from "drizzle-orm";
-import { db, plants, customers, teams, tickets } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { requireDept } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { PageHeader } from "@/components/ui";
-import { SearchBox } from "@/components/url-filters";
-import { PlantRow } from "@/components/plant-row";
-import { CopyField } from "@/components/copy-field";
-import { appUrl } from "@/lib/mail";
+import { asc, eq, like, or } from "drizzle-orm";
+import { db, plants, customers } from "@/db";
+import { requireUser } from "@/lib/core/auth";
+import { requireDept } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { PageHeader } from "@/components/ui/ui";
+import { SearchBox } from "@/components/ui/url-filters";
+import { PlantRow } from "@/components/helpdesk/plant-row";
+import { CopyField } from "@/components/ui/copy-field";
+import { appUrl } from "@/lib/core/mail";
 
 export const metadata = { title: "Plants" };
 
@@ -16,10 +16,9 @@ export default async function PlantsPage({ searchParams }: { searchParams: Promi
   const me = await requireUser();
   requireDept(me, "hd");
   const { q } = await searchParams;
-  const [rows, lk, counts] = await Promise.all([
+  const [rows, lk] = await Promise.all([
     db.select().from(plants).leftJoin(customers, eq(customers.id, plants.customerId)).where(q ? or(like(plants.plantNo, `%${q}%`), like(plants.name, `%${q}%`), like(customers.name, `%${q}%`), like(plants.city, `%${q}%`)) : undefined).orderBy(asc(plants.plantNo)),
     lookups(),
-    db.select({ id: tickets.plantId, n: sql<number>`count(*)` }).from(tickets).groupBy(tickets.plantId),
   ]);
   const canEdit = me.role !== "agent";
   return (

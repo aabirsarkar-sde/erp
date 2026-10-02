@@ -2,11 +2,11 @@ import { Fragment } from "react";
 import { notFound } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { db, tickets, messages } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { assertTicket } from "@/lib/access";
-import { PrintShell } from "@/components/print-shell";
-import { STAGE_META, PRIORITIES, ticketRef } from "@/lib/constants";
-import { fmtDateTime, fmtTat } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { assertTicket } from "@/lib/core/access";
+import { PrintShell } from "@/components/ui/print-shell";
+import { STAGE_META, PRIORITIES, ticketRef } from "@/lib/helpdesk/constants";
+import { fmtDateTime, fmtTat } from "@/lib/core/format";
 
 export default async function PrintTicket({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireUser();
@@ -51,7 +51,7 @@ export default async function PrintTicket({ params }: { params: Promise<{ id: st
       {t.signatureKey && (
         <div className="mt-6 break-inside-avoid">
           <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">Customer sign-off</div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          { }
           <img src={`/api/tickets/${t.id}/signature`} alt="" className="h-20" />
           <div>{t.signedBy}</div>
         </div>

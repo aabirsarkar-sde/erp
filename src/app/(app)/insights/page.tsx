@@ -1,12 +1,12 @@
 import { and, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import { db, tickets, teams, leads, crmStages, activities, users } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { ticketScope, leadScope, activityScope } from "@/lib/access";
-import { PageHeader } from "@/components/ui";
-import { LineChart, BarChart } from "@/components/charts";
-import { OPEN_STAGES } from "@/lib/constants";
-import { inrShort } from "@/lib/format";
-import { DAY_MS, localParts, startOfLocalWeek, fromLocal } from "@/lib/tz";
+import { requireUser } from "@/lib/core/auth";
+import { ticketScope, leadScope, activityScope } from "@/lib/core/access";
+import { PageHeader } from "@/components/ui/ui";
+import { LineChart, BarChart } from "@/components/ui/charts";
+import { OPEN_STAGES } from "@/lib/helpdesk/constants";
+import { inrShort } from "@/lib/core/format";
+import { DAY_MS, localParts, startOfLocalWeek, fromLocal } from "@/lib/core/tz";
 
 export const metadata = { title: "Insights" };
 export const dynamic = "force-dynamic";

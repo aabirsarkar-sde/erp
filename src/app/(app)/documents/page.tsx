@@ -2,14 +2,14 @@ import Link from "next/link";
 import { and, asc, desc, eq, isNull, like, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 import { db, documents, docFolders, customers, users } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { documentScope } from "@/lib/access";
-import { lookups } from "@/lib/queries";
+import { requireUser } from "@/lib/core/auth";
+import { documentScope } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
 import { createFolder, deleteDocument, updateDocument } from "@/app/actions/documents";
-import { PageHeader, Empty } from "@/components/ui";
-import { SearchBox } from "@/components/url-filters";
-import { DocUpload } from "@/components/doc-upload";
-import { fmtDate, fmtSize } from "@/lib/format";
+import { PageHeader, Empty } from "@/components/ui/ui";
+import { SearchBox } from "@/components/ui/url-filters";
+import { DocUpload } from "@/components/workspace/doc-upload";
+import { fmtDate, fmtSize } from "@/lib/core/format";
 
 export const metadata = { title: "Documents" };
 
@@ -64,7 +64,7 @@ export default async function DocumentsPage({ searchParams }: { searchParams: Pr
                   <li key={d.id} className="group px-4 py-3">
                     <div className="flex items-center gap-3">
                       {d.mime.startsWith("image/") ? (
-                        // eslint-disable-next-line @next/next/no-img-element
+                         
                         <img src={`/api/docs/${d.id}?view`} alt="" className="size-10 shrink-0 rounded object-cover" loading="lazy" />
                       ) : <span className={`flex size-10 shrink-0 items-center justify-center rounded text-[10px] font-bold ${EXT_CLS[e] ?? "bg-slate-100 text-slate-600"}`}>{e || "FILE"}</span>}
                       <div className="min-w-0 flex-1">

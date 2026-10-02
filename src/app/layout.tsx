@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { BRAND, EDITION } from "@/lib/edition";
+import { BRAND, EDITION } from "@/lib/core/edition";
 
 export const metadata: Metadata = {
   title: { default: BRAND.name, template: `%s · ${BRAND.short}` },

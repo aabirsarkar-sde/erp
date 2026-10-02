@@ -1,8 +1,8 @@
 import { Suspense } from "react";
-import { requireUser } from "@/lib/auth";
-import { aiEnabled } from "@/lib/ai";
-import { AskChat } from "@/components/ask-chat";
-import { Empty } from "@/components/ui";
+import { requireUser } from "@/lib/core/auth";
+import { aiEnabled } from "@/lib/ai/client";
+import { AskChat } from "@/components/workspace/ask-chat";
+import { Empty } from "@/components/ui/ui";
 
 export const metadata = { title: "Ask AI" };
 

@@ -1,5 +1,5 @@
-import { PublicShell } from "@/components/public-shell";
-import { PublicComplaintForm } from "@/components/public-complaint-form";
+import { PublicShell } from "@/components/ui/public-shell";
+import { PublicComplaintForm } from "@/components/helpdesk/public-complaint-form";
 
 export const metadata = { title: "Register a complaint" };
 

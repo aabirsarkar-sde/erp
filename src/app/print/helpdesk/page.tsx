@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/auth";
-import { helpdeskRows, groupBy, summary } from "@/lib/helpdesk-stats";
-import { PrintShell } from "@/components/print-shell";
-import { fmtTat } from "@/lib/format";
+import { requireUser } from "@/lib/core/auth";
+import { helpdeskRows, groupBy, summary } from "@/lib/helpdesk/stats";
+import { PrintShell } from "@/components/ui/print-shell";
+import { fmtTat } from "@/lib/core/format";
 
 export const metadata = { title: "Helpdesk report" };
 

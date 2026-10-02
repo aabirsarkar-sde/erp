@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { requireUser } from "@/lib/auth";
-import { visibleNav } from "@/lib/nav-config";
+import { requireUser } from "@/lib/core/auth";
+import { visibleNav } from "@/lib/workspace/nav-config";
 
 export default async function MorePage() {
   const me = await requireUser();

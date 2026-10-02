@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
 import { db, tickets } from "@/db";
-import { PublicShell } from "@/components/public-shell";
-import { FeedbackForm } from "@/components/feedback-form";
-import { ticketRef } from "@/lib/constants";
-import { fmtTat } from "@/lib/format";
+import { PublicShell } from "@/components/ui/public-shell";
+import { FeedbackForm } from "@/components/helpdesk/feedback-form";
+import { ticketRef } from "@/lib/helpdesk/constants";
+import { fmtTat } from "@/lib/core/format";
 
 export const metadata = { title: "Rate our service" };
 

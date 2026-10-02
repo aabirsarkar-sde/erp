@@ -1,7 +1,7 @@
-import { requireUser } from "@/lib/auth";
-import { lookups } from "@/lib/queries";
+import { requireUser } from "@/lib/core/auth";
+import { lookups } from "@/lib/core/lookups";
 import { createQuotation } from "@/app/actions/quotations";
-import { PageHeader, Field } from "@/components/ui";
+import { PageHeader, Field } from "@/components/ui/ui";
 
 export const metadata = { title: "New quotation" };
 

@@ -1,11 +1,11 @@
-import { requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/core/auth";
 import { eq } from "drizzle-orm";
 import { db, products } from "@/db";
-import { requireDept } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { getStages } from "@/lib/crm-queries";
-import { PageHeader } from "@/components/ui";
-import { NewLeadForm } from "@/components/lead-form";
+import { requireDept } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { getStages } from "@/lib/crm/queries";
+import { PageHeader } from "@/components/ui/ui";
+import { NewLeadForm } from "@/components/crm/lead-form";
 
 export const metadata = { title: "New opportunity" };
 

@@ -1,5 +1,5 @@
-import { getCurrentUser } from "@/lib/auth";
-import { unreadTotal } from "@/lib/chat";
+import { getCurrentUser } from "@/lib/core/auth";
+import { unreadTotal } from "@/lib/workspace/chat";
 
 export async function GET() {
   const me = await getCurrentUser();

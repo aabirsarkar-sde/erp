@@ -2,26 +2,26 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { asc, desc, eq, ne } from "drizzle-orm";
 import { db, leads, leadNotes, activities, quotations, documents, users } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { assertLead } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { getStages } from "@/lib/crm-queries";
+import { requireUser } from "@/lib/core/auth";
+import { canSeeLead } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { getStages } from "@/lib/crm/queries";
 import { moveLead, markWon, markLost, reopenLead, convertToOpportunity, addLeadMember, removeLeadMember } from "@/app/actions/crm";
-import { LeadDocUpload } from "@/components/lead-docs";
+import { LeadDocUpload } from "@/components/crm/lead-docs";
 import { createQuotation } from "@/app/actions/quotations";
-import { LeadDetails } from "@/components/lead-details";
-import { ActivityForm } from "@/components/activity-form";
-import { ActivityItem } from "@/components/activity-item";
-import { LeadNote } from "@/components/lead-note";
-import { AiLeadPanel } from "@/components/ai-lead-panel";
-import { AiQuickLog } from "@/components/ai-quick-log";
-import { aiEnabled } from "@/lib/ai";
-import { Stars } from "@/components/pipeline-board";
-import { tagList } from "@/lib/crm";
-import { Avatar } from "@/components/ui";
-import { IconBack, IconPlus } from "@/components/icons";
-import { ACTIVITY_META, LOST_REASONS, PROPOSAL_META, quoteRef } from "@/lib/crm";
-import { inr, fmtDate, fmtDateTime, fmtSize } from "@/lib/format";
+import { LeadDetails } from "@/components/crm/lead-details";
+import { ActivityForm } from "@/components/crm/activity-form";
+import { ActivityItem } from "@/components/crm/activity-item";
+import { LeadNote } from "@/components/crm/lead-note";
+import { AiLeadPanel } from "@/components/crm/ai-lead-panel";
+import { AiQuickLog } from "@/components/crm/ai-quick-log";
+import { aiEnabled } from "@/lib/ai/client";
+import { Stars } from "@/components/crm/pipeline-board";
+import { tagList } from "@/lib/crm/meta";
+import { Avatar } from "@/components/ui/ui";
+import { IconBack, IconPlus } from "@/components/ui/icons";
+import { ACTIVITY_META, LOST_REASONS, PROPOSAL_META, quoteRef } from "@/lib/crm/meta";
+import { inr, fmtDate, fmtDateTime, fmtSize } from "@/lib/core/format";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const l = await db.query.leads.findFirst({ where: eq(leads.id, Number((await params).id)), columns: { title: true } });
@@ -32,8 +32,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
   const me = await requireUser();
   const id = Number((await params).id);
   if (!Number.isFinite(id)) notFound();
-  await assertLead(me, id);
-  const [l, stages, lk, docs, salesUsers] = await Promise.all([
+  const [ok, l, stages, lk, docs, salesUsers] = await Promise.all([
+    canSeeLead(me, id), // checked together with the data load — one round trip
     db.query.leads.findFirst({
       where: eq(leads.id, id),
       with: {
@@ -51,7 +51,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       .from(documents).leftJoin(users, eq(users.id, documents.uploadedById)).where(eq(documents.leadId, id)).orderBy(desc(documents.createdAt)),
     db.select({ id: users.id, name: users.name }).from(users).where(ne(users.crmAccess, "none")).orderBy(asc(users.name)),
   ]);
-  if (!l) notFound();
+  if (!ok || !l) notFound();
   const planned = l.activities.filter((a) => !a.doneAt);
   const done = l.activities.filter((a) => a.doneAt);
   const curIdx = stages.findIndex((s) => s.id === l.stageId);

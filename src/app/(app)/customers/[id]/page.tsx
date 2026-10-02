@@ -2,41 +2,44 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db, customers, leads, quotations, documents, docFolders, crmStages, activities, users, contacts } from "@/db";
-import { leadScope, quotationScope, documentScope, activityScope } from "@/lib/access";
-import { ACTIVITY_META } from "@/lib/crm";
-import { fmtDateTime } from "@/lib/format";
-import { DocUpload } from "@/components/doc-upload";
-import { lookups } from "@/lib/queries";
-import { fmtSize } from "@/lib/format";
+import { leadScope, quotationScope, documentScope, activityScope } from "@/lib/core/access";
+import { ACTIVITY_META } from "@/lib/crm/meta";
+import { fmtDateTime } from "@/lib/core/format";
+import { DocUpload } from "@/components/workspace/doc-upload";
+import { lookups } from "@/lib/core/lookups";
+import { fmtSize } from "@/lib/core/format";
 import { and, desc, sql } from "drizzle-orm";
-import { inr as inrFmt } from "@/lib/format";
-import { quoteRef } from "@/lib/crm";
-import { QuoteStatus } from "@/components/quote-status";
-import { requireUser } from "@/lib/auth";
-import { listTickets } from "@/lib/queries";
+import { inr as inrFmt } from "@/lib/core/format";
+import { quoteRef } from "@/lib/crm/meta";
+import { QuoteStatus } from "@/components/crm/quote-status";
+import { requireUser } from "@/lib/core/auth";
+import { listTickets } from "@/lib/helpdesk/queries";
 import { updateCustomer, addContact, deleteContact } from "@/app/actions/customers";
-import { StageBadge, PriorityFlag, LinkButton, Avatar } from "@/components/ui";
-import { CustomerFields } from "@/components/customer-fields";
-import { ticketRef } from "@/lib/constants";
-import { timeAgo } from "@/lib/format";
-import { IconBack, IconPlus } from "@/components/icons";
+import { StageBadge, PriorityFlag, LinkButton, Avatar } from "@/components/ui/ui";
+import { CustomerFields } from "@/components/workspace/customer-fields";
+import { ticketRef } from "@/lib/helpdesk/constants";
+import { timeAgo } from "@/lib/core/format";
+import { IconBack, IconPlus } from "@/components/ui/icons";
 
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const me = await requireUser();
   const id = Number((await params).id);
-  const c = await db.query.customers.findFirst({ where: eq(customers.id, id), with: { contacts: true } });
-  if (!c) notFound();
   const hasCrm = me.crmAccess !== "none", hasHd = me.hdAccess !== "none";
-  const [tks, ls, qs, acts] = await Promise.all([
-    hasHd ? listTickets({ stage: "all" }, me, 500).then((r) => r.filter((t) => t.customerId === id)) : Promise.resolve([]),
+  // one round trip for the whole page
+  const [c, tks, ls, qs, acts, docs, folders, lk] = await Promise.all([
+    db.query.customers.findFirst({ where: eq(customers.id, id), with: { contacts: true } }),
+    hasHd ? listTickets({ stage: "all", customer: String(id) }, me, 500) : Promise.resolve([]),
     db.select({ id: leads.id, title: leads.title, status: leads.status, kind: leads.kind, expectedRevenue: leads.expectedRevenue, stage: { name: crmStages.name } })
       .from(leads).innerJoin(crmStages, eq(crmStages.id, leads.stageId)).where(and(eq(leads.customerId, id), leadScope(me))).orderBy(desc(leads.updatedAt)),
     db.select().from(quotations).where(and(eq(quotations.customerId, id), quotationScope(me))).orderBy(desc(quotations.date)),
     db.select({ id: activities.id, type: activities.type, summary: activities.summary, outcome: activities.outcome, discussion: activities.discussion, nextAction: activities.nextAction, dueAt: activities.dueAt, doneAt: activities.doneAt, user: users.name, contact: contacts.name, leadId: activities.leadId, lead: leads.title })
       .from(activities).leftJoin(users, eq(users.id, activities.userId)).leftJoin(contacts, eq(contacts.id, activities.contactId)).leftJoin(leads, eq(leads.id, activities.leadId))
       .where(and(eq(activities.customerId, id), activityScope(me))).orderBy(desc(sql`coalesce(${activities.doneAt}, ${activities.dueAt})`)).limit(100),
+    db.select().from(documents).where(and(eq(documents.customerId, id), documentScope(me))).orderBy(desc(documents.createdAt)),
+    db.select().from(docFolders),
+    lookups(),
   ]);
-  const [docs, folders, lk] = await Promise.all([db.select().from(documents).where(and(eq(documents.customerId, id), documentScope(me))).orderBy(desc(documents.createdAt)), db.select().from(docFolders), lookups()]);
+  if (!c) notFound();
 
   return (
     <div className="mx-auto max-w-6xl">

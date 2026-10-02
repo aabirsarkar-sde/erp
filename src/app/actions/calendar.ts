@@ -4,12 +4,12 @@ import { redirect } from "next/navigation";
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
 import { db, events, eventAttendees, users } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { fromLocalInput } from "@/lib/tz";
-import { buildIcs } from "@/lib/ics";
-import { sendMail, appUrl } from "@/lib/mail";
-import { fmtDateTime } from "@/lib/format";
-import { getOrCreateCalendarToken } from "@/lib/calendar";
+import { requireUser } from "@/lib/core/auth";
+import { fromLocalInput } from "@/lib/core/tz";
+import { buildIcs } from "@/lib/workspace/ics";
+import { sendMail, appUrl } from "@/lib/core/mail";
+import { fmtDateTime } from "@/lib/core/format";
+import { getOrCreateCalendarToken } from "@/lib/workspace/calendar";
 
 const s = (fd: FormData, k: string) => { const v = String(fd.get(k) ?? "").trim(); return v || null; };
 const n = (fd: FormData, k: string) => (Number(fd.get(k)) || null);

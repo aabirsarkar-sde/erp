@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { and, gte } from "drizzle-orm";
 import { db, tickets } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { ticketScope, requireDept } from "@/lib/access";
-import { lookups } from "@/lib/queries";
-import { getSla } from "@/lib/sla";
-import { PageHeader } from "@/components/ui";
-import { OPEN_STAGES } from "@/lib/constants";
+import { requireUser } from "@/lib/core/auth";
+import { ticketScope, requireDept } from "@/lib/core/access";
+import { lookups } from "@/lib/core/lookups";
+import { getSla } from "@/lib/helpdesk/sla";
+import { PageHeader } from "@/components/ui/ui";
+import { OPEN_STAGES } from "@/lib/helpdesk/constants";
 
 export const metadata = { title: "Reports" };
 export const dynamic = "force-dynamic";

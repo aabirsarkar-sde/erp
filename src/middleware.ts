@@ -1,9 +1,9 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { SESSION_COOKIE, verifySession } from "@/lib/session";
-import { editionHasCrm, editionHasHd } from "@/lib/edition";
+import { SESSION_COOKIE, verifySession } from "@/lib/core/session";
+import { editionHasCrm, editionHasHd } from "@/lib/core/edition";
 
 // routes that open without signing in
-const PUBLIC = /^\/(login|complaint|feedback|api\/cron|api\/inbound-email|api\/calendar|manifest\.webmanifest|icon\.svg|brand-icon\.svg|favicon\.ico)(\/|$|\?)/;
+const PUBLIC = /^\/(login|complaint|feedback|api\/cron|api\/inbound-email|api\/calendar|manifest\.webmanifest|brand-icon\.svg|favicon\.ico)(\/|$|\?)/;
 // routes that belong to one product only — the other deployment answers 404
 const HD_ONLY = /^\/(tickets|helpdesk|plants|reports|complaint|feedback|api\/cron\/escalate|api\/inbound-email|api\/tickets|api\/export\/(tickets|helpdesk)|print\/(tickets|helpdesk))(\/|$)/;
 const CRM_ONLY = /^\/(crm|activities|quotations|sales-reports|calendar\/activity|api\/export\/sales|print\/(sales|quotations))(\/|$)/;

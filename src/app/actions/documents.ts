@@ -2,8 +2,8 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db, documents, docFolders } from "@/db";
-import { requireUser } from "@/lib/auth";
-import { saveFile, MAX_UPLOAD } from "@/lib/storage";
+import { requireUser } from "@/lib/core/auth";
+import { saveFile, MAX_UPLOAD } from "@/lib/core/storage";
 
 export async function uploadDocuments(_p: { ok?: boolean; error?: string } | undefined, fd: FormData) {
   const me = await requireUser();

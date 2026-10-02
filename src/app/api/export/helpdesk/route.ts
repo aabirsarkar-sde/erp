@@ -1,8 +1,8 @@
-import { getCurrentUser } from "@/lib/auth";
-import { helpdeskRows, groupBy, summary } from "@/lib/helpdesk-stats";
-import { addSheet, newWorkbook, xlsxResponse } from "@/lib/xlsx";
-import { STAGE_META, ticketRef } from "@/lib/constants";
-import { fmtTat } from "@/lib/format";
+import { getCurrentUser } from "@/lib/core/auth";
+import { helpdeskRows, groupBy, summary } from "@/lib/helpdesk/stats";
+import { addSheet, newWorkbook, xlsxResponse } from "@/lib/core/xlsx";
+import { STAGE_META, ticketRef } from "@/lib/helpdesk/constants";
+import { fmtTat } from "@/lib/core/format";
 
 export async function GET(req: Request) {
   const me = await getCurrentUser();
