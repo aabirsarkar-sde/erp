@@ -9,6 +9,10 @@ import { Sparkle } from "@/components/workspace/ai-ui";
 import { and, eq, isNull, lt, ne, sql } from "drizzle-orm";
 import { DAY_MS, localParts, startOfLocalDay } from "@/lib/core/tz";
 import { db, activities, leads, tasks } from "@/db";
+import { myKpis } from "@/lib/crm/kpi";
+import { listNotifications, parseActions } from "@/lib/workspace/notify";
+import { KpiStrip } from "@/components/crm/kpi-strip";
+import { NotificationItem } from "@/components/workspace/notifications";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +21,7 @@ export default async function Dashboard() {
   const hd = me.hdAccess !== "none", crm = me.crmAccess !== "none";
   const today = startOfLocalDay(Date.now()), tomorrow = new Date(+today + DAY_MS); // IST, not the server's clock
   // everything in one round trip; the other department's numbers aren't fetched at all
-  const [teams, mine, recent, [acts], [pipe], [tk], [gaps]] = await Promise.all([
+  const [teams, mine, recent, [acts], [pipe], [tk], [gaps], kpis, nudges] = await Promise.all([
     hd ? teamStats(me) : Promise.resolve([]),
     hd ? myStats(me) : Promise.resolve({ mine: 0, unassigned: 0, unattended: 0, overdue: 0 }),
     hd ? listTickets({ sort: "updated", stage: "all" }, me, 8) : Promise.resolve([]),
@@ -26,6 +30,8 @@ export default async function Dashboard() {
     crm ? db.select({ n: sql<number>`count(*)`, v: sql<number>`coalesce(sum(${leads.expectedRevenue}),0)` }).from(leads).where(and(eq(leads.ownerId, me.id), eq(leads.status, "open"))) : Promise.resolve([{ n: 0, v: 0 }]),
     db.select({ n: sql<number>`count(*)`, late: sql<number>`coalesce(sum(case when ${tasks.dueAt} < ${Math.floor(+today / 1000)} then 1 else 0 end),0)` }).from(tasks).where(and(eq(tasks.assigneeId, me.id), ne(tasks.status, "done"))),
     crm ? db.select({ missing: sql<number>`coalesce(sum(case when coalesce(${leads.phone},'') = '' or coalesce(${leads.email},'') = '' or coalesce(${leads.address},'') = '' or coalesce(${leads.contactName},'') = '' then 1 else 0 end),0)`, old: sql<number>`coalesce(sum(case when ${leads.createdAt} < ${Math.floor((Date.now() - 90 * DAY_MS) / 1000)} then 1 else 0 end),0)` }).from(leads).where(and(eq(leads.ownerId, me.id), eq(leads.status, "open"))) : Promise.resolve([{ missing: 0, old: 0 }]),
+    crm ? myKpis(me.id, Date.now()) : Promise.resolve([]),
+    listNotifications(me.id, { unread: true, limit: 5 }),
   ]);
   const hour = localParts(Date.now()).h;
   const greet = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
@@ -50,6 +56,16 @@ export default async function Dashboard() {
       </div>
       </>)}
 
+      {crm && <KpiStrip items={kpis} title="My targets" />}
+      {nudges.length > 0 && (
+        <section className="card mb-4">
+          <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
+            <h2 className="text-sm font-semibold">For you today</h2>
+            <Link href="/notifications" className="text-xs text-brand-700 hover:underline">All notifications →</Link>
+          </div>
+          <ul className="divide-y divide-slate-100">{nudges.map((n) => <NotificationItem key={n.id} n={{ ...n, actions: parseActions(n.actions) }} compact />)}</ul>
+        </section>
+      )}
       {crm && (
       <div className={`grid grid-cols-2 gap-3 lg:grid-cols-4 ${hd ? "mt-3" : ""}`}>
         <Link href="/activities" className="card p-4 hover:border-brand-200">

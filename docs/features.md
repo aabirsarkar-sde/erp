@@ -58,6 +58,74 @@ Lead → convert to Opportunity → activities / visits from the calendar → pr
 - **Outlook:** each person subscribes to their private calendar link (Calendar → Sync with Outlook). Planned activities appear
   at their time; Outlook refreshes subscribed calendars every few hours.
 
+## Sales CRM: second round (Oct 2026)
+
+- **Enter once, see everywhere:** an activity is one record. Whether it's logged in the calendar, on the opportunity or from
+  the Day view, it shows in the calendar, the opportunity history, the daily report, sales reports and the KPI board.
+- **Calendar colours:** blue = planned, green = done, red = overdue (past its time and not reported), violet = meetings.
+  The same colours are used in the Day/Week/Month views and on the opportunity, with a key at the top.
+- **KPI & KRA** (Performance → KPI & KRA): the sales head sets daily, weekly and monthly KPIs/KRAs on **Set targets** — what to
+  measure (calls, visits, meetings, WhatsApp follow-ups, daily reports filed, new leads/opportunities, pipeline added, quotations
+  sent/value, orders won/value) or **typed in by hand** (e.g. collections ₹). One default target per KPI, overridable per person
+  (0 = not applicable). The scoreboard is visible to the whole sales team; each person's targets show at the top of their calendar
+  day and on the dashboard. Green ≥ 100 %, amber ≥ 60 %, red below.
+- **Dashboards** (Performance → Dashboards): everyone builds up to 8 boards of their own — pick a measure, grouping (salesperson,
+  product, geography, Hot/Warm/Cold, stage, customer, source, label, month, activity type), chart (big number, bars, line by month,
+  table) and period (30/90 days, 12 months, this FY, this month, all time). Boards can be shared with the team; others can copy them.
+  "Sales overview" is a ready-made starter.
+- **Notifications (🔔)**: reminders, AI suggestions, tasks and new enquiries, with quick buttons (Call, WhatsApp, Email, Log it).
+- **Remind someone** (opportunity page, for managers): "Please call this party today" puts a planned activity in the person's
+  calendar, a notification in their bell and an email. Planning an activity for a colleague anywhere does the same.
+- **AI follow-up suggestions:** every morning (8:30 am) the CRM checks each open opportunity — overdue activities, quotations or
+  jar tests with no follow-up after N days, submitted proposals going quiet, no contact for N days — and gives each salesperson up
+  to 5 suggestions in plain words ("It's been 12 days since the jar test at X — let's call him today"), with a ready-written
+  WhatsApp message. Rules and limits are in Settings; the AI only words the message.
+- **Templates & collateral** (Sales → Templates & collateral): WhatsApp and email templates with `{{contact}}`, `{{customer}}`,
+  `{{product}}`, `{{salesperson}}`… and a library of case studies, brochures, ads and emailers. On every opportunity,
+  **Send to customer** fills a template, adds a case study (as a 30-day download link on WhatsApp, or attached to an email),
+  opens WhatsApp or sends the email, and logs it on the opportunity.
+- **Enquiries inbox** (Sales → Enquiries): website form, emails to the sales mailbox and WhatsApp enquiries in one list. Existing
+  customers are recognised by email/phone/domain; the owner of their open opportunity (or the people set in Settings) is alerted.
+  One click turns an enquiry into a lead, adds it to an existing opportunity, passes it to someone or dismisses it.
+  - **Website:** link to `/enquiry` or embed `<iframe src="https://<crm>/enquiry?embed=1">`; developers can also
+    `POST /api/enquiry` (JSON or form fields; optional `x-enquiry-key` = `ENQUIRY_API_KEY`).
+  - **Email:** with Microsoft 365 connected (see below) mail to e.g. sales@raybonchemicals.com — or forwarded there — arrives
+    automatically. Any other service can POST to `/api/inbound-email`.
+  - **WhatsApp:** paste a chat (AI picks out name, company, number, product). On Android, install the CRM (Add to Home screen) and
+    use WhatsApp → Share → Raybon Sales CRM.
+
+## Sales CRM: "Salesforce" round (Oct 2026)
+
+- **Raybon structure:** Company → **Plant / site** (with its applications, industry, capacity) → **Application** → Contacts →
+  Product → Enquiry → **Technical evaluation & trials** (water analysis, jar test, pilot; planned / running / successful / failed,
+  with results) → Quotation → Opportunity → **Order** (Won asks for PO number, date and value). Each opportunity also has a
+  **business line** (Water treatment, Membranes, Chemicals, O&M…) and a **forecast category**.
+- **Pipeline stages are editable** (Settings → Pipeline stages): rename, reorder, set probability, remove (its deals move to
+  another stage). One click adds the suggested flow Enquiry → Technical evaluation → Trial → Quotation → Negotiation.
+- **Customer 360°:** the customer page shows open pipeline, business won, orders, last contact, contacts and sites at the top,
+  and one timeline with every email, visit, call, note, enquiry, trial, quotation, order and ticket.
+- **Playbooks** (Sales → Playbooks): automatic task chains. "When an opportunity mentioning *membrane* is created → water analysis
+  (day 0) → membrane selection (day 2) → quotation (day 4) → technical follow-up call (day 11)", or "when a deal enters the
+  quotation stage → confirmation call, technical call, commercial meeting". Steps become tasks or calendar activities for the
+  salesperson (or a named person), once per opportunity.
+- **Scoring:** every open opportunity gets a 0–100 score (A / B / C) from stage, value, how recently and how often the customer
+  was contacted, trials, proposal stage, repeat business, Hot/Warm/Cold and overdue follow-ups — hover to see why. Enquiries are
+  scored too. Sort the pipeline or the enquiries inbox by score.
+- **Forecast** (Performance → Forecast): this/next month, this/next quarter (Apr–Jun…), financial year; by salesperson,
+  geography, business line or product. Won (orders) · Commit · Best case · Weighted pipeline, against each person's
+  monthly "Order value won" KRA. Flags deals with no or past closing dates.
+- **CEO view** dashboard (Dashboards → New → Start from "CEO view"): open pipeline, forecast this quarter, quotations pending,
+  overdue follow-ups, sales funnel, follow-ups overdue by salesperson, quotations awaiting decision, win rate, orders by month,
+  new enquiries, pipeline by business line.
+- **Email capture ("corporate memory"):** emails with known customers are filed on their opportunity automatically —
+  - **BCC / forward:** BCC the sales mailbox on any customer email, or forward a customer's email to it. `[OPP-123]` in the
+    subject files it on that opportunity. Unknown senders in a forward become enquiries; internal mail is ignored.
+  - **Outlook capture:** with Microsoft 365 connected, tick people in Settings → Email capture. Their sent/received mail and
+    meetings with customers are logged within minutes (webhook) plus a daily sweep. Only mail with known customer addresses
+    or company domains is stored (subject + first 1,500 characters).
+- **Hand over** (Settings → Users → "Hand over their work"): move someone's open deals, planned activities, tasks, enquiries and
+  tickets to a colleague in one go; history stays with the customer. Optionally switch off their login.
+
 ## Tasks (both products)
 
 Assign a task to anyone with a due date and priority, optionally linked to an opportunity or ticket. **Tasks** is a kanban
@@ -112,10 +180,17 @@ What's included:
 
 Without email settings the app still works; outgoing emails are printed in the terminal instead.
 
-- **Sending** (customer replies, "assigned to you" alerts, receipt of new tickets): fill `SMTP_*` and `MAIL_FROM` in `.env`. Any free SMTP account works, such as Brevo (300 emails/day) or a Gmail app password.
-- **Receiving** (email-to-ticket): route a support address to `POST /api/inbound-email` with the header `x-inbound-secret: $INBOUND_EMAIL_SECRET`. `docs/integrations/cloudflare-email-worker.js` does this for free with Cloudflare Email Routing.
-  - A subject containing `TKT-0012` is added to that ticket as a customer reply, and reopens it if it was waiting or resolved.
-  - Any other email creates a new ticket. The sender is matched to a customer by contact email or company domain, and gets an acknowledgement.
+- **Microsoft 365 (recommended for raybonchemicals.com):** one app registration handles both directions, with no mailbox password
+  (Microsoft is retiring password-based SMTP). Set `MS_TENANT_ID`, `MS_CLIENT_ID`, `MS_CLIENT_SECRET`, `MS_SEND_FROM` and `MS_INBOX`
+  — see [deployment](deployment.md#microsoft-365-email). New mail arrives within seconds (Graph change notifications) and a daily
+  sweep catches anything missed. Settings → Email shows the status and has **Check mailbox now**.
+- **SMTP** (any provider): fill `SMTP_*` and `MAIL_FROM`.
+- **Receiving through anything else:** POST to `/api/inbound-email` with the header `x-inbound-secret: $INBOUND_EMAIL_SECRET`
+  (`docs/integrations/cloudflare-email-worker.js` is a free example).
+  - Helpdesk: a subject containing `TKT-0012` is added to that ticket as a customer reply (and reopens it); any other email creates a
+    new ticket, matched to a customer by contact email or domain, with an acknowledgement.
+  - CRM: every email becomes an enquiry (duplicates are ignored). A salesperson can forward a customer's mail to the sales mailbox;
+    the original sender is picked up from the forwarded header.
 
 ## Attachments
 
@@ -127,4 +202,24 @@ On the Calendar page, open "Sync with Outlook, Google or Apple Calendar" and cop
 
 ## Moving data over from Odoo
 
-Log in as admin and go to Settings → Import from Odoo. Import **contacts first**, then opportunities, then tickets. On each screen, the Odoo list view's Export button gives a CSV. The import page says which columns to tick for each.
+**Recommended — straight from Odoo's API** (`scripts/odoo-import.ts`): customers and contacts, opportunities and leads with
+labels, stages, owners, won/lost; their full chatter history (notes and emails), open planned activities, quotations with lines,
+helpdesk tickets with their email thread, and optionally attachments. Safe to re-run: it updates what it imported before.
+
+1. Ask ATH Software (or the Odoo admin) for: the Odoo URL, the **database name**, and a login with read access to CRM, Sales,
+   Contacts and Helpdesk, plus an **API key** for that login (Odoo → My Profile → Account Security → New API key).
+2. Add every salesperson / engineer in Settings → Users with the **same email** they use in Odoo (that's how owners are matched).
+3. Dry run, then import — once per database:
+
+```bash
+ODOO_URL=https://erp.raybon.athsoftware.com ODOO_DB=<db> ODOO_USER=<login> ODOO_PASSWORD=<api key> \
+APP_EDITION=crm DATABASE_URL="libsql://<crm-db>" DATABASE_AUTH_TOKEN="<token>" npx tsx scripts/odoo-import.ts --dry-run
+# looks right? run it without --dry-run. Add --attachments to copy files (needs BLOB_READ_WRITE_TOKEN set locally).
+# Same again with APP_EDITION=helpdesk and the helpdesk database for tickets.
+```
+
+Do a test run into a copy first, check a few customers end to end, then freeze Odoo, run it on production, and switch over.
+`--since=YYYY-MM-DD` picks up only what changed after a date (for a final top-up on cut-over day).
+
+**Without API access:** Settings → Import from Odoo takes CSV exports from Odoo's list views (contacts first, then opportunities,
+then tickets). It doesn't carry history or attachments.

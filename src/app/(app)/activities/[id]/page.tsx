@@ -49,7 +49,7 @@ export default async function ActivityPage({ params }: { params: Promise<{ id: s
       </dl>
       {a.doneAt && (a.discussion || a.outcome) && (
         <section className="card mb-4 space-y-3 p-5 text-sm">
-          {a.discussion && <div><h3 className="mb-1 text-xs font-semibold uppercase text-slate-500">Discussion points</h3><p className="whitespace-pre-wrap">{a.discussion}</p></div>}
+          {a.discussion && <div><h3 className="mb-1 text-xs font-semibold uppercase text-slate-500">Discussion points</h3><p className="whitespace-pre-wrap [overflow-wrap:anywhere]">{a.discussion}</p></div>}
           {a.outcome && <div><h3 className="mb-1 text-xs font-semibold uppercase text-slate-500">Outcome</h3><p className="whitespace-pre-wrap">{a.outcome}</p></div>}
           {a.nextAction && <div><h3 className="mb-1 text-xs font-semibold uppercase text-slate-500">Next action</h3><p>{a.nextAction}</p></div>}
         </section>

@@ -5,6 +5,8 @@ import { listLeads, getStages, wonThisMonth } from "@/lib/crm/queries";
 import { lookups } from "@/lib/core/lookups";
 import { PipelineBoard, Stars, ActivityDot, type GroupBy, type SortBy } from "@/components/crm/pipeline-board";
 import { QuickAdd } from "@/components/crm/quick-add";
+import { scoreFor } from "@/lib/crm/score";
+import { ScoreBadge } from "@/components/crm/score-badge";
 import { tagSuggestions } from "@/lib/crm/tags";
 import { and, asc, eq, isNotNull, ne } from "drizzle-orm";
 import { db, users, leads } from "@/db";
@@ -27,10 +29,11 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
     db.selectDistinct({ p: leads.product }).from(leads).where(isNotNull(leads.product)),
   ]);
   const groupBy = (["stage", "owner", "product", "geography", "temperature"].includes(sp.group ?? "") ? sp.group : "stage") as GroupBy;
-  const sortBy = (["manual", "revenue", "age"].includes(sp.sort ?? "") ? sp.sort : "manual") as SortBy;
+  const sortBy = (["manual", "revenue", "age", "score"].includes(sp.sort ?? "") ? sp.sort : "manual") as SortBy;
+  const scores = await scoreFor(rows0.filter((r) => r.status === "open").map((r) => r.id));
   // list view: highest value first by default; board keeps the manual order unless asked
   const listSort = sp.sort ?? "revenue";
-  const rows = [...rows0].sort((a, b) => (listSort === "revenue" ? b.expectedRevenue - a.expectedRevenue : listSort === "age" ? +a.createdAt - +b.createdAt : 0));
+  const rows = [...rows0].map((r) => ({ ...r, score: scores.get(r.id) ?? null })).sort((a, b) => (listSort === "revenue" ? b.expectedRevenue - a.expectedRevenue : listSort === "age" ? +a.createdAt - +b.createdAt : listSort === "score" ? (b.score?.score ?? 0) - (a.score?.score ?? 0) : 0));
   const products = productRows.map((r) => r.p!).filter(Boolean).sort();
   const open = rows.filter((r) => r.status === "open");
   const total = open.reduce((a, r) => a + r.expectedRevenue, 0);
@@ -61,7 +64,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
         <ParamSelect name="owner" fallback="me" options={[["me", "My pipeline"], ["all", "Everyone"], ...lk.users.map((u) => [String(u.id), u.name] as [string, string])]} />
         <ParamSelect name="status" fallback="open" options={[["open", "Open"], ["won", "Won"], ["lost", "Lost"], ["all", "All"]]} />
         {!list && <ParamSelect name="group" fallback="stage" options={[["stage", "Group: Stage"], ["owner", "Group: Salesperson"], ["product", "Group: Product"], ["geography", "Group: Geography"], ["temperature", "Group: Hot / Warm / Cold"]]} />}
-        <ParamSelect name="sort" fallback={list ? "revenue" : "manual"} options={[...(list ? [] : [["manual", "Sort: My order"] as [string, string]]), ["revenue", "Sort: Value (high → low)"], ["age", "Sort: Oldest first"]]} />
+        <ParamSelect name="sort" fallback={list ? "revenue" : "manual"} options={[...(list ? [] : [["manual", "Sort: My order"] as [string, string]]), ["revenue", "Sort: Value (high → low)"], ["score", "Sort: Score (best first)"], ["age", "Sort: Oldest first"]]} />
         <ParamSelect name="tag" options={[["", "All labels"], ...defs.map((d) => [d.name, d.name] as [string, string])]} />
         <ParamSelect name="product" options={[["", "All products"], ...products.map((p) => [p, p] as [string, string])]} />
         <ParamToggle name="view" fallback="board" options={[["board", <IconBoard key="b" className="size-4" />, "Board"], ["list", <IconList key="l" className="size-4" />, "List"]]} />
@@ -73,7 +76,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
         <div className="card overflow-x-auto">
           <table className="w-full min-w-[800px] text-sm">
             <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs font-medium text-slate-500">
-              <tr><th className="px-4 py-2.5">Opportunity</th><th className="px-3 py-2.5">Customer</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Proposal</th><th className="px-3 py-2.5 text-right">Expected</th><th className="px-3 py-2.5 text-right">Prob.</th><th className="px-3 py-2.5 text-right">Age</th><th className="px-3 py-2.5">Salesperson</th><th className="px-4 py-2.5">Next</th></tr>
+              <tr><th className="px-4 py-2.5">Opportunity</th><th className="px-3 py-2.5">Customer</th><th className="px-3 py-2.5">Stage</th><th className="px-3 py-2.5">Proposal</th><th className="px-3 py-2.5 text-right">Expected</th><th className="px-3 py-2.5 text-right">Prob.</th><th className="px-3 py-2.5 text-right">Score</th><th className="px-3 py-2.5 text-right">Age</th><th className="px-3 py-2.5">Salesperson</th><th className="px-4 py-2.5">Next</th></tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {rows.map((r) => {
@@ -92,6 +95,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
                     <td className="px-3 py-2.5"><span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-xs ${PROPOSAL_META[r.proposalStatus]?.cls}`}>{PROPOSAL_META[r.proposalStatus]?.label}</span></td>
                     <td className="px-3 py-2.5 text-right tabular-nums">{r.expectedRevenue ? inr(r.expectedRevenue) : "—"}</td>
                     <td className="px-3 py-2.5 text-right tabular-nums text-slate-500">{r.probability}%</td>
+                    <td className="relative z-10 px-3 py-2.5 text-right">{r.score ? <ScoreBadge s={r.score} compact /> : "—"}</td>
                     <td className="px-3 py-2.5 text-right"><span className={`rounded-full px-1.5 py-0.5 text-xs font-medium ${r.status === "open" ? ageTone(daysBetween(r.createdAt, Date.now())) : "bg-emerald-50 text-emerald-700"}`}>{r.status === "open" ? `${daysBetween(r.createdAt, Date.now())}d` : r.closedAt ? `${daysBetween(r.createdAt, r.closedAt)}d TAT` : "—"}</span></td>
                     <td className="px-3 py-2.5"><span className="flex items-center gap-2"><Avatar name={r.ownerName} size="sm" /><span className="truncate text-slate-600">{r.ownerName ?? "—"}</span></span></td>
                     <td className="px-4 py-2.5"><ActivityDot ts={r.nextActivity} /></td>
@@ -100,7 +104,7 @@ export default async function PipelinePage({ searchParams }: { searchParams: Pro
               })}
             </tbody>
             <tfoot className="border-t border-slate-200 bg-slate-50 text-sm font-semibold">
-              <tr><td className="px-4 py-2.5" colSpan={4}>Total ({rows.length})</td><td className="px-3 py-2.5 text-right tabular-nums">{inr(rows.reduce((a, r) => a + r.expectedRevenue, 0))}</td><td colSpan={4} /></tr>
+              <tr><td className="px-4 py-2.5" colSpan={4}>Total ({rows.length})</td><td className="px-3 py-2.5 text-right tabular-nums">{inr(rows.reduce((a, r) => a + r.expectedRevenue, 0))}</td><td colSpan={5} /></tr>
             </tfoot>
           </table>
         </div>

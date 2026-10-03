@@ -1,6 +1,6 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
-import { db, tasks, diaryEntries, plants, ticketWatchers, cannedResponses, aiUsage, events, eventAttendees, calendarTokens, channels, channelMembers, chatMessages, docFolders, documents, users, teams, teamMembers, customers, contacts, tickets, messages, attachments, settings, quotationLines, quotations, products, leadNotes, activities, leads, crmStages } from "../src/db";
+import { db, playbookRuns, playbooks, orders, trials, sites, notifications, kpiValues, kpiTargets, kpiDefs, dashboards, templates, enquiries, importMap, tasks, diaryEntries, plants, ticketWatchers, cannedResponses, aiUsage, events, eventAttendees, calendarTokens, channels, channelMembers, chatMessages, docFolders, documents, users, teams, teamMembers, customers, contacts, tickets, messages, attachments, settings, quotationLines, quotations, products, leadNotes, activities, leads, crmStages } from "../src/db";
 import { sql } from "drizzle-orm";
 import { seedCrm } from "./seed-crm";
 import { BRAND, editionHasCrm, editionHasHd } from "../src/lib/core/edition";
@@ -11,7 +11,7 @@ async function main() {
     console.log("Database already has data — skipping seed (use --force to wipe & reseed).");
     return;
   }
-  for (const t of [tasks, diaryEntries, ticketWatchers, cannedResponses, eventAttendees, events, calendarTokens, chatMessages, channelMembers, channels, documents, docFolders, quotationLines, quotations, products, leadNotes, activities, leads, crmStages, attachments, messages, tickets, plants, contacts, customers, teamMembers, teams, users, settings, aiUsage]) await db.delete(t);
+  for (const t of [playbookRuns, playbooks, orders, trials, notifications, kpiValues, kpiTargets, kpiDefs, dashboards, templates, enquiries, importMap, tasks, diaryEntries, ticketWatchers, cannedResponses, eventAttendees, events, calendarTokens, chatMessages, channelMembers, channels, documents, docFolders, quotationLines, quotations, products, leadNotes, activities, leads, sites, crmStages, attachments, messages, tickets, plants, contacts, customers, teamMembers, teams, users, settings, aiUsage]) await db.delete(t);
   await db.run(sql`delete from sqlite_sequence`).catch(() => {});
 
   const hash = (p: string) => bcrypt.hashSync(p, 10);

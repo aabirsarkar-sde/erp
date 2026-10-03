@@ -9,6 +9,14 @@
       "schedule": "30 2 * * *"
     },
     {
+      "path": "/api/cron/nudges",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/mailbox",
+      "schedule": "30 0 * * *"
+    },
+    {
       "path": "/api/cron/daily-report",
       "schedule": "0 14 * * *"
     }

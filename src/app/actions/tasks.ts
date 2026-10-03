@@ -9,6 +9,7 @@ import { guardLead, guardTicket } from "@/lib/core/access";
 import { sendMail, appUrl } from "@/lib/core/mail";
 import { fromLocalInput } from "@/lib/core/tz";
 import { fmtDate } from "@/lib/core/format";
+import { notify } from "@/lib/workspace/notify";
 
 const optInt = z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nullable());
 const schema = z.object({
@@ -38,6 +39,7 @@ async function guardTask(me: CurrentUser, id: number) {
 async function notifyAssignee(taskId: number, me: CurrentUser) {
   const t = await db.query.tasks.findFirst({ where: eq(tasks.id, taskId), with: { assignee: true } });
   if (!t?.assignee || t.assignee.id === me.id) return;
+  await notify({ userId: t.assignee.id, kind: "task", fromUserId: me.id, title: `${me.name} gave you a task: ${t.title}`, body: t.dueAt ? `Due ${fmtDate(t.dueAt)}` : null, href: `/tasks?open=${t.id}`, leadId: t.leadId });
   await sendMail({
     to: t.assignee.email,
     subject: `New task from ${me.name}: ${t.title}`,
@@ -75,6 +77,7 @@ export async function moveTask(id: number, status: (typeof TASK_STATUS)[number])
   // tell whoever assigned it when it's finished
   if (status === "done" && old.createdById && old.createdById !== me.id) {
     const by = await db.query.users.findFirst({ where: eq(users.id, old.createdById) });
+    if (by) await notify({ userId: by.id, kind: "task", fromUserId: me.id, title: `${me.name} finished: ${old.title}`, href: `/tasks?open=${id}`, leadId: old.leadId });
     if (by) await sendMail({ to: by.email, subject: `Done: ${old.title}`, text: `${me.name} marked the task "${old.title}" as done.\n\n${appUrl()}/tasks?open=${id}` });
   }
   refresh(old);

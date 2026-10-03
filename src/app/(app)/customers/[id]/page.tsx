@@ -1,7 +1,10 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { db, customers, leads, quotations, documents, docFolders, crmStages, activities, users, contacts } from "@/db";
+import { db, customers, leads, quotations, documents, docFolders, crmStages, activities, users, contacts, sites, trials, orders, enquiries, leadNotes } from "@/db";
+import { saveSite, deleteSite } from "@/app/actions/structure";
+import { inrShort } from "@/lib/core/format";
+import { TRIAL_STATUS_META } from "@/lib/crm/meta";
 import { leadScope, quotationScope, documentScope, activityScope } from "@/lib/core/access";
 import { ACTIVITY_META } from "@/lib/crm/meta";
 import { fmtDateTime } from "@/lib/core/format";
@@ -40,6 +43,29 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     lookups(),
   ]);
   if (!c) notFound();
+  // 360° view (CRM): sites, orders, trials, enquiries and notes — one more round trip
+  const leadIds = ls.map((l) => l.id);
+  const [siteRows, orderRows, trialRows, enqRows, noteRows] = hasCrm ? await Promise.all([
+    db.select().from(sites).where(eq(sites.customerId, id)).orderBy(sites.name),
+    db.select({ id: orders.id, poNumber: orders.poNumber, poDate: orders.poDate, value: orders.value, leadId: orders.leadId }).from(orders).where(eq(orders.customerId, id)).orderBy(desc(orders.poDate)),
+    leadIds.length ? db.select({ id: trials.id, kind: trials.kind, product: trials.product, status: trials.status, result: trials.result, at: sql<number>`coalesce(${trials.endAt}, ${trials.startAt}, ${trials.createdAt})`, leadId: trials.leadId }).from(trials).where(sql`${trials.leadId} in (${sql.join(leadIds.map((x) => sql`${x}`), sql`, `)})`) : Promise.resolve([]),
+    db.select({ id: enquiries.id, source: enquiries.source, subject: enquiries.subject, createdAt: enquiries.createdAt, status: enquiries.status }).from(enquiries).where(eq(enquiries.customerId, id)).orderBy(desc(enquiries.createdAt)).limit(30),
+    leadIds.length ? db.select({ id: leadNotes.id, body: leadNotes.body, createdAt: leadNotes.createdAt, leadId: leadNotes.leadId, who: users.name }).from(leadNotes).leftJoin(users, eq(users.id, leadNotes.authorId)).where(and(eq(leadNotes.kind, "note"), sql`${leadNotes.leadId} in (${sql.join(leadIds.map((x) => sql`${x}`), sql`, `)})`)).orderBy(desc(leadNotes.createdAt)).limit(50) : Promise.resolve([]),
+  ]) : [[], [], [], [], []] as const;
+  const leadTitle = (lid: number | null) => ls.find((l) => l.id === lid)?.title;
+  type TL = { key: string; at: Date; icon: string; title: string; sub?: string | null; href?: string };
+  const timeline: TL[] = hasCrm ? [
+    ...acts.filter((a) => a.doneAt).map((a) => ({ key: `a${a.id}`, at: a.doneAt!, icon: ACTIVITY_META[a.type].emoji, title: a.summary, sub: [a.user, a.lead, a.outcome && `→ ${a.outcome}`].filter(Boolean).join(" · "), href: `/activities/${a.id}` })),
+    ...noteRows.map((n) => ({ key: `n${n.id}`, at: n.createdAt, icon: "📝", title: n.body.split("\n")[0]!.slice(0, 140), sub: [n.who, leadTitle(n.leadId)].filter(Boolean).join(" · "), href: `/crm/${n.leadId}` })),
+    ...enqRows.map((e) => ({ key: `e${e.id}`, at: e.createdAt, icon: "📥", title: `Enquiry (${e.source}): ${e.subject ?? ""}`, sub: e.status, href: `/enquiries?s=all&open=${e.id}` })),
+    ...trialRows.map((t) => ({ key: `t${t.id}`, at: new Date(Number(t.at) * 1000), icon: "🧪", title: `${t.kind}${t.product ? ` · ${t.product}` : ""} — ${TRIAL_STATUS_META[t.status]?.label ?? t.status}`, sub: [t.result, leadTitle(t.leadId)].filter(Boolean).join(" · "), href: `/crm/${t.leadId}` })),
+    ...qs.map((q) => ({ key: `q${q.id}`, at: q.date, icon: "📄", title: `Quotation ${quoteRef(q.number, q.revision)} · ${inrFmt(q.total)}`, sub: q.status, href: `/quotations/${q.id}` })),
+    ...orderRows.map((o) => ({ key: `o${o.id}`, at: o.poDate, icon: "📦", title: `Order ${o.poNumber ?? ""} · ${inrFmt(o.value)}`, sub: leadTitle(o.leadId), href: o.leadId ? `/crm/${o.leadId}` : undefined })),
+    ...(tks as { id: number; subject: string; createdAt: Date }[]).map((t) => ({ key: `k${t.id}`, at: t.createdAt, icon: "🎫", title: `${ticketRef(t.id)} ${t.subject}`, href: `/tickets/${t.id}` })),
+  ].sort((a, b) => +b.at - +a.at).slice(0, 80) : [];
+  const lastContact = acts.find((a) => a.doneAt)?.doneAt ?? null;
+  const openValue = ls.filter((l) => l.status === "open").reduce((a, l) => a + l.expectedRevenue, 0);
+  const wonValue = orderRows.length ? orderRows.reduce((a, o) => a + o.value, 0) : ls.filter((l) => l.status === "won").reduce((a, l) => a + l.expectedRevenue, 0);
 
   return (
     <div className="mx-auto max-w-6xl">
@@ -56,8 +82,31 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         </div>
       </div>
 
+      {hasCrm && (
+        <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" data-testid="customer-stats">
+          {[["Open pipeline", inrShort(openValue)], ["Business won", inrShort(wonValue)], ["Orders", String(orderRows.length || ls.filter((l) => l.status === "won").length)], ["Last contact", lastContact ? timeAgo(lastContact) : "never"], ["Contacts", String(c.contacts.length)], ["Sites", String(siteRows.length)]].map(([k, v]) => (
+            <div key={k} className="card p-3"><div className="text-[11px] text-slate-500">{k}</div><div className="mt-0.5 truncate text-lg font-semibold tabular-nums" suppressHydrationWarning>{v}</div></div>
+          ))}
+        </div>
+      )}
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
+          {hasCrm && (
+            <section className="card" data-testid="customer-timeline">
+              <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Customer timeline — everything in one place ({timeline.length})</h2>
+              {timeline.length === 0 ? <p className="px-4 py-4 text-sm text-slate-500">Nothing yet.</p> : (
+                <ol className="max-h-[32rem] divide-y divide-slate-100 overflow-y-auto">
+                  {timeline.map((t) => (
+                    <li key={t.key} className="flex gap-3 px-4 py-2.5 text-sm">
+                      <span className="w-5 shrink-0 text-center">{t.icon}</span>
+                      <div className="min-w-0 flex-1">{t.href ? <Link href={t.href} className="font-medium hover:text-brand-700 hover:underline">{t.title}</Link> : <span className="font-medium">{t.title}</span>}{t.sub && <div className="truncate text-xs text-slate-500">{t.sub}</div>}</div>
+                      <span className="shrink-0 text-xs text-slate-400" suppressHydrationWarning>{fmtDateTime(t.at)}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </section>
+          )}
           {hasHd && <section className="card">
             <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Tickets ({tks.length})</h2>
             {tks.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">No tickets yet.</p> : (
@@ -152,6 +201,37 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
         </div>
 
         <aside className="space-y-4">
+          {hasCrm && (
+            <section className="card" data-testid="sites">
+              <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Plants / sites ({siteRows.length})</h2>
+              <ul className="divide-y divide-slate-100">
+                {siteRows.map((st) => (
+                  <li key={st.id} className="px-4 py-3 text-sm">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0"><div className="font-medium">{st.name}</div><div className="text-xs text-slate-500">{[st.city, st.industry, st.capacity].filter(Boolean).join(" · ")}</div></div>
+                      <form action={deleteSite.bind(null, c.id, st.id)}><button className="text-xs text-slate-300 hover:text-red-600" title="Remove site">✕</button></form>
+                    </div>
+                    {st.applications && <div className="mt-1 flex flex-wrap gap-1">{st.applications.split(",").map((a) => a.trim()).filter(Boolean).map((a) => <span key={a} className="rounded-full bg-sky-50 px-1.5 text-[11px] text-sky-800">{a}</span>)}</div>}
+                    <details className="mt-1"><summary className="cursor-pointer text-xs text-brand-700">Edit</summary>
+                      <form action={saveSite.bind(null, c.id, st.id)} className="mt-2 space-y-1.5">
+                        <input name="name" defaultValue={st.name} required className="input py-1 text-sm" />
+                        <div className="grid grid-cols-2 gap-1.5"><input name="city" defaultValue={st.city ?? ""} placeholder="City" className="input py-1 text-sm" /><input name="industry" defaultValue={st.industry ?? ""} placeholder="Industry" className="input py-1 text-sm" /></div>
+                        <input name="applications" defaultValue={st.applications ?? ""} placeholder="Applications (comma separated)" className="input py-1 text-sm" />
+                        <input name="capacity" defaultValue={st.capacity ?? ""} placeholder="Capacity" className="input py-1 text-sm" />
+                        <button className="btn-secondary w-full py-1 text-xs">Save</button>
+                      </form>
+                    </details>
+                  </li>
+                ))}
+              </ul>
+              <form action={saveSite.bind(null, c.id, null)} className="space-y-2 border-t border-slate-100 p-4">
+                <input name="name" required placeholder="Site — e.g. Caustic soda plant, Bharuch" className="input" aria-label="Site name" />
+                <div className="grid grid-cols-2 gap-2"><input name="city" placeholder="City" className="input" /><input name="industry" placeholder="Industry — e.g. Chlor-alkali" className="input" /></div>
+                <input name="applications" placeholder="Applications — e.g. Brine clarification, ETP" className="input" aria-label="Applications" />
+                <button className="btn-secondary w-full">Add site</button>
+              </form>
+            </section>
+          )}
           <section className="card">
             <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Contacts</h2>
             <ul className="divide-y divide-slate-100">

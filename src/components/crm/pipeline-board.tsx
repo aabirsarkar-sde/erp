@@ -6,12 +6,14 @@ import { moveLead, updateLead } from "@/app/actions/crm";
 import { stageColor, tagList, tagCls, ageTone, daysBetween, missingContact, type TagDef } from "@/lib/crm/meta";
 import { inrShort } from "@/lib/core/format";
 import { Avatar } from "@/components/ui/ui";
+import { ScoreBadge } from "@/components/crm/score-badge";
 
 type Stage = { id: number; name: string; color: string };
 export type Card = {
   id: number; title: string; stageId: number; expectedRevenue: number; priority: number; tags: string | null; sortOrder: number;
   customerName: string | null; ownerName: string | null; ownerId: number | null; nextActivity: number | null; status: string; createdAt: Date;
   product: string | null; city: string | null; contactName: string | null; phone: string | null; email: string | null; address: string | null;
+  score?: { score: number; band: "A" | "B" | "C"; reasons: { pts: number; why: string }[] } | null;
 };
 
 export function Stars({ n, size = "text-sm" }: { n: number; size?: string }) {
@@ -33,7 +35,7 @@ export function ActivityDot({ ts }: { ts: number | null }) {
 
 
 export type GroupBy = "stage" | "owner" | "product" | "geography" | "temperature";
-export type SortBy = "manual" | "revenue" | "age";
+export type SortBy = "manual" | "revenue" | "age" | "score";
 
 /** Kanban board. Grouped by stage (drag to move stage) or salesperson (drag to reassign); other groupings are read-only views. */
 export function PipelineBoard({ stages, cards, groupBy = "stage", sortBy = "manual", users, defs }: { stages: Stage[]; cards: Card[]; groupBy?: GroupBy; sortBy?: SortBy; users: { id: number; name: string }[]; defs: TagDef[] }) {
@@ -53,7 +55,7 @@ export function PipelineBoard({ stages, cards, groupBy = "stage", sortBy = "manu
         const keys = [...new Set(items.map(keyOf))].sort((a, b) => (a ? (b ? a.localeCompare(b) : -1) : 1));
         return keys.map((k) => ({ key: `k${k}`, label: k || (groupBy === "temperature" ? "No temperature label" : "Not set"), match: (c: Card) => keyOf(c) === k }));
       })();
-  const order = (a: Card, b: Card) => (sortBy === "revenue" ? b.expectedRevenue - a.expectedRevenue : sortBy === "age" ? +a.createdAt - +b.createdAt : a.sortOrder - b.sortOrder);
+  const order = (a: Card, b: Card) => (sortBy === "revenue" ? b.expectedRevenue - a.expectedRevenue : sortBy === "age" ? +a.createdAt - +b.createdAt : sortBy === "score" ? (b.score?.score ?? 0) - (a.score?.score ?? 0) : a.sortOrder - b.sortOrder);
 
   const drop = (col: (typeof cols)[number], beforeId: number | null) => {
     if (drag == null || !draggable) return;
@@ -110,7 +112,7 @@ export function PipelineBoard({ stages, cards, groupBy = "stage", sortBy = "manu
                     <Link href={`/crm/${c.id}`} draggable={false} className={`card block p-3 transition hover:border-brand-200 hover:shadow-sm ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}>
                       <div className="flex items-start justify-between gap-2">
                         <div className="text-sm font-medium leading-snug">{c.title}</div>
-                        <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${ageTone(age)}`} title="Days since the opportunity was created" suppressHydrationWarning>{age}d</span>
+                        <span className="flex shrink-0 items-center gap-1">{c.score && <ScoreBadge s={c.score} compact />}<span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${ageTone(age)}`} title="Days since the opportunity was created" suppressHydrationWarning>{age}d</span></span>
                       </div>
                       {c.expectedRevenue > 0 && <div className="mt-1 text-sm font-semibold tabular-nums text-slate-800">{inrShort(c.expectedRevenue)}</div>}
                       <div className="mt-0.5 truncate text-xs text-slate-500">{c.customerName ?? "—"}{c.product ? ` · ${c.product}` : ""}</div>

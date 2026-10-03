@@ -1,5 +1,38 @@
 # Changelog
 
+## 1.4.0 — 3 Oct 2026
+
+Manager's "Salesforce" list:
+- **Raybon structure:** customer plants/sites with applications, application + business line on opportunities, technical
+  evaluation & trials, orders (Won records the PO), editable pipeline stages with the suggested Enquiry → Technical evaluation →
+  Trial → Quotation → Negotiation flow.
+- **Email capture:** BCC / forward to the sales mailbox files customer emails on the right opportunity (`[OPP-123]` to force);
+  optional Outlook capture of mail and meetings with known customers via Microsoft Graph.
+- **Playbooks:** automatic task chains on create / stage entry, matched by product words and business line.
+- **Scoring** of opportunities and enquiries with reasons; pipeline and inbox sortable by score.
+- **Forecast** by period (Indian FY quarters) and salesperson / geography / business line / product, with commit / best case /
+  weighted and KRA targets. Forecast category on every opportunity.
+- **CEO view** dashboard template (+ new measures: quotations pending, overdue follow-ups, new enquiries, forecast, orders).
+- **Customer 360°** stats and unified timeline; **hand over** a person's work in one step.
+- Odoo import also creates orders from confirmed sales orders.
+
+## 1.3.0 — 3 Oct 2026
+
+Manager's second round:
+- **KPI & KRA:** daily / weekly / monthly targets per person, counted automatically from activities, opportunities, quotations and
+  orders (or typed in by hand); team scoreboard; targets strip on the calendar day and dashboard.
+- **Calendar colours:** planned blue, done green, overdue red, meetings violet, with a key — everywhere activities appear.
+- **Saved dashboards:** personal boards with chosen measure / grouping / chart / period, shareable and copyable.
+- **Notifications bell**, manager **reminders** ("please call this party"), and morning **AI follow-up suggestions** with one-tap
+  call / WhatsApp / email.
+- **Templates & collateral:** WhatsApp and email templates with placeholders, case-study / brochure library, expiring share links,
+  **Send to customer** panel on every opportunity (logged automatically). New activity type: WhatsApp.
+- **Enquiries inbox:** public website form (+ embed and API), email-to-CRM, WhatsApp paste with AI, Android share target;
+  customer matching, routing and one-click convert / add to opportunity.
+- **Microsoft 365 email** through Graph (send + receive, webhook + daily sweep) for both products — replaces SMTP.
+- **Odoo API import** (`scripts/odoo-import.ts`) with history, activities, quotations, tickets and attachments; re-runnable; tested
+  against a fake Odoo.
+
 ## 1.2.0 — 3 Oct 2026
 
 Manager's CRM requests:

@@ -95,6 +95,7 @@ export const documents = sqliteTable(
     mime: text("mime").notNull(),
     size: integer("size").notNull(),
     storageKey: text("storage_key").notNull(),
+    category: text("category"), // set for sales collateral: case_study, brochure, ad, emailer, presentation, other
     customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
     leadId: integer("lead_id").references(() => leads.id, { onDelete: "set null" }),
     uploadedById: integer("uploaded_by_id").references(() => users.id, { onDelete: "set null" }),
@@ -172,3 +173,24 @@ export const tasksRelations = relations(tasks, ({ one }) => ({
   ticket: one(tickets, { fields: [tasks.ticketId], references: [tickets.id] }),
   customer: one(customers, { fields: [tasks.customerId], references: [customers.id] }),
 }));
+
+// ---------- Notifications: the bell — reminders, AI nudges, task and enquiry alerts ----------
+export const NOTIFY_KINDS = ["reminder", "nudge", "task", "enquiry", "system"] as const;
+export const notifications = sqliteTable(
+  "notifications",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    kind: text("kind", { enum: NOTIFY_KINDS }).notNull().default("system"),
+    title: text("title").notNull(),
+    body: text("body"),
+    href: text("href"),
+    leadId: integer("lead_id").references(() => leads.id, { onDelete: "cascade" }),
+    actions: text("actions"), // JSON NotifyAction[] — quick buttons (call / email / WhatsApp)
+    fromUserId: integer("from_user_id").references(() => users.id, { onDelete: "set null" }),
+    dedupeKey: text("dedupe_key"),
+    readAt: integer("read_at", { mode: "timestamp" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("notifications_user").on(t.userId, t.readAt), uniqueIndex("notifications_dedupe").on(t.dedupeKey)],
+);

@@ -1,9 +1,9 @@
 import { DEFAULT_TERMS } from "../src/lib/crm/quote-terms";
 import { eq } from "drizzle-orm";
-import { db, customers, contacts, users, crmStages, leads, activities, leadNotes, products, quotations, quotationLines, tagDefs } from "../src/db";
+import { db, customers, contacts, users, crmStages, leads, activities, leadNotes, products, quotations, quotationLines, tagDefs, kpiDefs, kpiTargets, templates, enquiries, sites, trials, orders, playbooks, playbookRuns } from "../src/db";
 
 export async function seedCrm() {
-  for (const t of [quotationLines, quotations, products, leadNotes, activities, leads, crmStages, tagDefs]) await db.delete(t);
+  for (const t of [playbookRuns, playbooks, orders, trials, enquiries, templates, kpiTargets, kpiDefs, quotationLines, quotations, products, leadNotes, activities, leads, sites, crmStages, tagDefs]) await db.delete(t);
   // default labels: geography, customer type, temperature
   const T = (group: "Geography" | "Customer" | "Temperature" | "Product", color: string, names: string[]) => names.map((name) => ({ name, group, color }));
   await db.insert(tagDefs).values([
@@ -77,6 +77,8 @@ export async function seedCrm() {
       phone: i % 3 === 0 ? null : `+91 98${String(2500000 + i * 7919).slice(0, 8)}`, email: i % 4 === 0 ? null : `${contactName.split(" ").pop()!.toLowerCase().replace(/[^a-z]/g, "")}@${cname.split(" ")[0]!.toLowerCase().replace(/[^a-z]/g, "")}.com`,
       address: i % 2 === 0 ? null : `GIDC Estate, ${city}`, capacity: capacity ?? null, ownerId: i % 3 === 1 ? gaurang.id : i % 3 === 2 ? priyank.id : aarti.id, kind: i < 3 ? ("lead" as const) : ("opportunity" as const), product: ["ROSERVE RO Plant", "Multiple Effect Evaporator (MEE)", "ZLD system (RO + MEE + ATFD)", "ROCHEM DTRO", "O&M contract"][i % 5], proposalStatus: (["not_started", "preparing", "submitted", "submitted", "revised", "under_negotiation"] as const)[i % 6],
       source: ["Referral", "Website", "Existing customer", "Exhibition"][i % 4], sortOrder: i,
+      segment: ["Water treatment (RO / ZLD)", "Evaporators / MEE", "Water treatment (RO / ZLD)", "Membranes & spares", "O&M / AMC"][i % 5],
+      forecast: (sk === "HOT" ? "commit" : sk === "QUALIFIED" || sk === "WARM" ? "best_case" : "pipeline") as "commit" | "best_case" | "pipeline",
       expectedCloseAt: new Date(Date.now() + ((i % 5) * 20 + 10) * DAY), createdAt: new Date(Date.now() - (i * 11 + 5) * DAY), updatedAt: new Date(Date.now() - i * DAY),
     });
   }
@@ -84,6 +86,36 @@ export async function seedCrm() {
   leadRows.push({ ...leadRows[2]!, title: "Grasim Industries - Vilayat ZLD", customerId: await custId("Grasim Industries Ltd.", "Vilayat"), contactName: "Kirit Jadav", expectedRevenue: 14750000, status: "won" as const, closedAt: new Date(Date.now() - 20 * DAY), probability: 100 });
   leadRows.push({ ...leadRows[3]!, title: "PGP Glass - Supriya Dasguptaa", customerId: await custId("PGP Glass Pvt. Ltd.", "Jambusar"), contactName: "Supriya Dasguptaa", expectedRevenue: 8378000, status: "lost" as const, lostReason: "Price too high", closedAt: new Date(Date.now() - 40 * DAY), probability: 0 });
   const ls = await db.insert(leads).values(leadRows).returning();
+  // customer plants / sites (company → site → application)
+  const neogenId = await custId("Neogen Chemicals Ltd.");
+  const [neoSite] = await db.insert(sites).values([
+    { customerId: neogenId, name: "Dahej unit (bromine & lithium)", city: "Dahej", industry: "Specialty chemicals", applications: "ETP, RO reject, Cooling tower blowdown", capacity: "600 KLD" },
+    { customerId: await custId("DCM Shriram Industries Ltd."), name: "Jhagadia chlor-alkali plant", city: "Jhagadia", industry: "Chlor-alkali", applications: "Brine clarification, Caustic soda, ETP" },
+    { customerId: await custId("Apcotex Industries Ltd."), name: "Taloja latex plant", city: "Taloja", industry: "Synthetic latex", applications: "ETP, ZLD" },
+  ]).returning();
+  const neoLead = ls.find((l) => l.title.startsWith("Neogen"))!;
+  await db.update(leads).set({ siteId: neoSite!.id, application: "RO reject" }).where(eq(leads.id, neoLead.id));
+  await db.insert(trials).values([
+    { leadId: neoLead.id, kind: "Water analysis", product: "RO reject sample", status: "success", startAt: new Date(Date.now() - 30 * DAY), endAt: new Date(Date.now() - 27 * DAY), result: "TDS 18,500 ppm, silica 140 ppm — DTRO feasible", createdById: aarti.id },
+    { leadId: neoLead.id, kind: "Pilot trial", product: "DTRO pilot skid", status: "running", startAt: new Date(Date.now() - 6 * DAY), createdById: aarti.id },
+  ]);
+  const grasim = ls.find((l) => l.status === "won")!;
+  await db.insert(orders).values({ leadId: grasim.id, customerId: grasim.customerId, poNumber: "GIL/PO/2026/0412", poDate: new Date(Date.now() - 20 * DAY), value: grasim.expectedRevenue, segment: grasim.segment, ownerId: grasim.ownerId, createdById: aarti.id });
+  // playbooks: automatic task chains
+  const quoteStage = stages.find((s) => s.name.startsWith("Qualified"))!;
+  await db.insert(playbooks).values([
+    { name: "Membrane enquiry", trigger: "created", matchProduct: "membrane, DTRO, RO spares", steps: JSON.stringify([
+      { title: "Get water analysis from {{customer}}", days: 0, kind: "task", assign: "owner" },
+      { title: "Membrane selection & projection", days: 2, kind: "task", assign: "owner" },
+      { title: "Send quotation", days: 4, kind: "task", assign: "owner" },
+      { title: "Technical follow-up call", days: 11, kind: "call", assign: "owner" },
+    ]) },
+    { name: "Quotation follow-up", trigger: "stage", stageId: quoteStage.id, steps: JSON.stringify([
+      { title: "Confirm {{customer}} received the quotation", days: 2, kind: "call", assign: "owner" },
+      { title: "Technical clarification call", days: 7, kind: "call", assign: "owner" },
+      { title: "Commercial follow-up / negotiation", days: 14, kind: "meeting", assign: "owner" },
+    ]) },
+  ]);
 
   const acts = [];
   const types = ["call", "meeting", "visit", "email", "todo"] as const;
@@ -146,6 +178,35 @@ export async function seedCrm() {
       .returning();
     await db.insert(quotationLines).values(lines.map((l) => ({ ...l, quotationId: q!.id })));
   }
+  // KPI / KRA targets (the sales head edits these on /kpi/setup)
+  const kd = await db.insert(kpiDefs).values([
+    { name: "Customer calls", kind: "kpi", period: "daily", metric: "calls", target: 5, sortOrder: 1 },
+    { name: "Site visits", kind: "kpi", period: "daily", metric: "visits", target: 1, sortOrder: 2 },
+    { name: "Daily report filed", kind: "kpi", period: "weekly", metric: "reports_filed", target: 5, sortOrder: 1 },
+    { name: "Site visits", kind: "kpi", period: "weekly", metric: "visits", target: 5, sortOrder: 2 },
+    { name: "Quotations sent", kind: "kra", period: "weekly", metric: "quotations", target: 2, sortOrder: 3 },
+    { name: "New opportunities", kind: "kra", period: "monthly", metric: "new_opportunities", target: 4, sortOrder: 1 },
+    { name: "Order value won", kind: "kra", period: "monthly", metric: "order_value", target: 10000000, sortOrder: 2 },
+    { name: "Collections", kind: "kra", period: "monthly", metric: "manual_inr", target: 5000000, sortOrder: 3 },
+  ]).returning();
+  await db.insert(kpiTargets).values({ kpiId: kd.find((k) => k.name === "Order value won")!.id, userId: aarti.id, target: 25000000 });
+
+  // message templates
+  await db.insert(templates).values([
+    { kind: "whatsapp", category: "Follow-up", name: "After quotation", body: "Dear {{contact}}, greetings from Raybon (Zero Discharge Systems). Hope you received our offer for {{product}}. Happy to clarify anything technical or commercial — may I call you today? — {{salesperson}}, {{salesperson_phone}}" },
+    { kind: "whatsapp", category: "Jar test / trial", name: "Jar test results", body: "Dear {{contact}}, the jar test results for {{customer}} are ready. Shall we set up a short call to go through them and the next steps? — {{salesperson}}" },
+    { kind: "whatsapp", category: "Ad / promotion", name: "ZLD case study", body: "Dear {{contact}}, sharing a recent ZLD project we commissioned — 450 KLD, pharma, Dahej. {{link}} Let us know if you'd like a site visit. — Team Raybon" },
+    { kind: "email", category: "Introduction", name: "Company introduction", subject: "Raybon / Rochem — water & wastewater solutions for {{customer}}", body: "Dear {{contact}},\n\nThank you for your interest. Zero Discharge Systems (Raybon / Rochem) designs, builds and operates RO, DTRO, MEE and complete ZLD plants across Gujarat and Maharashtra.\n\nPlease find our case study attached. We'd be glad to visit {{city}} to understand your requirement.\n\nRegards,\n{{salesperson}}\n{{salesperson_phone}}" },
+    { kind: "email", category: "Follow-up", name: "Quotation follow-up", subject: "Our offer for {{product}} — {{customer}}", body: "Dear {{contact}},\n\nFollowing up on our offer for {{product}}. Please let us know if you need any clarification, or a meeting with our process team.\n\nRegards,\n{{salesperson}}" },
+  ]);
+
+  // a few enquiries waiting in the inbox
+  const neogen = await custId("Neogen Chemicals Ltd.");
+  await db.insert(enquiries).values([
+    { source: "website", name: "Ravi Mehta", company: "Shree Dyechem Pvt. Ltd.", email: "ravi@shreedyechem.example", phone: "+91 98250 11223", city: "Ankleshwar", product: "Zero Liquid Discharge (ZLD)", subject: "Enquiry: Zero Liquid Discharge (ZLD)", message: "We generate ~150 KLD of high-TDS effluent from our dye unit. Looking for a ZLD solution, please call.", createdAt: new Date(Date.now() - 3 * 3600e3) },
+    { source: "email", name: "Purchase Dept", company: null, email: "purchase@neogenchem.example", customerId: neogen, subject: "RO membranes — replacement quote", message: "Dear Sir,\nPlease send your best rate for 8 nos. of 8040 RO membranes for our existing plant.\nRegards,\nPurchase", externalId: "mail:seed-1@example", createdAt: new Date(Date.now() - 26 * 3600e3) },
+    { source: "whatsapp", name: "Mukesh Patel", phone: "+91 99090 44556", city: "Vapi", subject: "Wants an STP for a new building", message: "[10:42 am] Mukesh Patel: Hello, we need STP 50 KLD for new building in Vapi. Pls share price", createdById: priyank.id, createdAt: new Date(Date.now() - 50 * 3600e3) },
+  ]);
   void contacts;
   console.log(`Seeded CRM: ${stages.length} stages, ${ls.length} leads, ${acts.length} activities, ${prods.length} products, ${Q.length} quotations.`);
 }

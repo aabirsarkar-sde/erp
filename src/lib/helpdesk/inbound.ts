@@ -10,12 +10,16 @@ import { settings } from "@/db";
 
 export type InboundEmail = {
   from: string; // "Name <a@b.com>" or "a@b.com"
+  to?: string; // which mailbox it was sent to (sales@ → CRM enquiry, support@ → ticket)
+  cc?: string;
+  date?: string; // ISO time it was sent
   subject?: string;
   text?: string;
+  messageId?: string; // stops the same email being imported twice
   attachments?: { filename: string; contentType?: string; content: string /* base64 */ }[];
 };
 
-function parseAddress(s: string) {
+export function parseAddress(s: string) {
   const m = s.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/);
   const email = (m ? m[2]! : s).trim().toLowerCase();
   const name = m?.[1]?.trim() || null;
@@ -23,7 +27,7 @@ function parseAddress(s: string) {
 }
 
 // strip quoted history below the first "On ... wrote:" / "-----Original Message-----"
-function stripQuoted(text: string) {
+export function stripQuoted(text: string) {
   const cut = text.search(/^(On .+wrote:|-{2,}\s*Original Message\s*-{2,}|From: .+)$/im);
   return (cut > 0 ? text.slice(0, cut) : text).replace(/(\n>.*)+\s*$/g, "").trim();
 }

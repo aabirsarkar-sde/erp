@@ -3,10 +3,10 @@ import { SESSION_COOKIE, verifySession } from "@/lib/core/session";
 import { editionHasCrm, editionHasHd } from "@/lib/core/edition";
 
 // routes that open without signing in
-const PUBLIC = /^\/(login|complaint|feedback|api\/cron|api\/inbound-email|api\/calendar|manifest\.webmanifest|brand-icon\.svg|favicon\.ico)(\/|$|\?)/;
+const PUBLIC = /^\/(login|complaint|feedback|enquiry|s|api\/cron|api\/inbound-email|api\/enquiry|api\/graph|api\/calendar|manifest\.webmanifest|brand-icon\.svg|favicon\.ico)(\/|$|\?)/;
 // routes that belong to one product only — the other deployment answers 404
-const HD_ONLY = /^\/(tickets|helpdesk|plants|reports|complaint|feedback|api\/cron\/escalate|api\/inbound-email|api\/tickets|api\/export\/(tickets|helpdesk)|print\/(tickets|helpdesk))(\/|$)/;
-const CRM_ONLY = /^\/(crm|activities|quotations|sales-reports|daily-report|calendar\/activity|api\/cron\/daily-report|api\/export\/sales|print\/(sales|quotations))(\/|$)/;
+const HD_ONLY = /^\/(tickets|helpdesk|plants|reports|complaint|feedback|api\/cron\/escalate|api\/tickets|api\/export\/(tickets|helpdesk)|print\/(tickets|helpdesk))(\/|$)/;
+const CRM_ONLY = /^\/(crm|activities|quotations|sales-reports|daily-report|kpi|dashboards|enquiries|enquiry|templates|playbooks|forecast|calendar\/activity|api\/cron\/(daily-report|nudges)|api\/enquiry|api\/export\/sales|print\/(sales|quotations))(\/|$)/;
 
 export async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;

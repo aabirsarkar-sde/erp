@@ -1,7 +1,7 @@
 import { startOfLocalDay } from "@/lib/core/tz";
 import Link from "next/link";
 import { completeActivity, deleteActivity } from "@/app/actions/crm";
-import { ACTIVITY_META } from "@/lib/crm/meta";
+import { ACTIVITY_META, ACT_STATE, actState } from "@/lib/crm/meta";
 import { fmtDate } from "@/lib/core/format";
 import type { ActivityType } from "@/db/crm";
 
@@ -16,14 +16,16 @@ function dueTone(d: Date | null) {
 
 export function ActivityItem({ a, showLead }: { a: A; showLead?: boolean }) {
   const m = ACTIVITY_META[a.type];
+  const st = actState(a);
   return (
-    <li className="px-4 py-3">
+    <li className={`border-l-4 px-4 py-3 ${st === "overdue" ? "border-rose-500 bg-rose-50/40" : st === "done" ? "border-emerald-500" : "border-sky-400"}`} data-state={st}>
       <div className="flex items-start gap-3">
         <span className="mt-0.5 text-lg leading-none" title={m.label}>{m.emoji}</span>
         <div className="min-w-0 flex-1">
           <Link href={`/activities/${a.id}`} className="text-sm font-medium hover:text-brand-700 hover:underline">{a.summary}</Link>
           <div className="mt-0.5 flex flex-wrap gap-x-2 text-xs text-slate-500">
             <span className={`font-medium ${dueTone(a.dueAt)}`}>{fmtDate(a.dueAt)}</span>
+            <span className={`font-medium ${ACT_STATE[st].text}`}>· {ACT_STATE[st].label}</span>
             {a.userName && <span>· {a.userName}</span>}
             {showLead && a.leadId && <Link href={`/crm/${a.leadId}`} className="truncate text-brand-700 hover:underline">· {a.leadTitle}</Link>}
             {showLead && !a.leadId && a.customerName && <span>· {a.customerName}</span>}

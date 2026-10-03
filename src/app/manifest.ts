@@ -9,5 +9,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f8fafc",
     theme_color: EDITION === "crm" ? "#2752c4" : "#0d857e",
     icons: [{ src: "/brand-icon.svg", sizes: "any", type: "image/svg+xml" }],
+    // Android: share a WhatsApp message straight into the Enquiries inbox
+    ...(EDITION !== "helpdesk" ? { share_target: { action: "/enquiries/share", method: "GET", params: { title: "title", text: "text", url: "url" } } } : {}),
   };
 }

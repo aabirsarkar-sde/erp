@@ -3,14 +3,16 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { and, asc, eq, isNull, like } from "drizzle-orm";
 import { z } from "zod";
-import { db, leads, leadNotes, activities, crmStages, customers, contacts, users, leadMembers, documents, tagDefs, diaryEntries, ACTIVITY_TYPES, PROPOSAL_STATUS, TAG_GROUPS } from "@/db";
+import { db, leads, leadNotes, activities, crmStages, customers, contacts, users, leadMembers, documents, tagDefs, diaryEntries, ACTIVITY_TYPES, PROPOSAL_STATUS, TAG_GROUPS, FORECAST_CATS } from "@/db";
 import { saveFile, MAX_UPLOAD } from "@/lib/core/storage";
-import { PROPOSAL_META, joinTags, tagList, orderTag, missingContact, TAG_GROUP_COLOR } from "@/lib/crm/meta";
+import { PROPOSAL_META, joinTags, tagList, missingContact, TAG_GROUP_COLOR } from "@/lib/crm/meta";
 import { atLocal10, localDateKey } from "@/lib/core/tz";
 import { requireUser } from "@/lib/core/auth";
 import { guardLead, hasCrm, activityScope, leadScope } from "@/lib/core/access";
 import { inr } from "@/lib/core/format";
 import { fromLocalInput } from "@/lib/core/tz";
+import { notify } from "@/lib/workspace/notify";
+import { runPlaybooks } from "@/lib/crm/playbooks";
 
 const optInt = z.preprocess((v) => (v === "" || v == null ? null : Number(v)), z.number().int().nullable());
 const optStr = z.preprocess((v) => (typeof v === "string" && v.trim() ? v.trim() : null), z.string().nullable());
@@ -49,6 +51,10 @@ const leadSchema = z.object({
   stageId: z.coerce.number().int().optional(),
   ownerId: optInt,
   expectedCloseAt: optDate,
+  siteId: optInt,
+  application: optStr,
+  segment: optStr,
+  forecast: z.enum(FORECAST_CATS).optional(),
 });
 
 export async function createLead(_p: { error?: string } | undefined, fd: FormData) {
@@ -83,6 +89,7 @@ export async function createLead(_p: { error?: string } | undefined, fd: FormDat
     .returning();
   await log(l!.id, me.id, d.kind === "lead" ? "Lead created" : "Opportunity created");
   await syncContactReminder(l!.id);
+  await runPlaybooks(l!.id, "created", me.id);
   refresh();
   redirect(`/crm/${l!.id}`);
 }
@@ -118,19 +125,7 @@ export async function moveLead(id: number, stageId: number, sortOrder?: number) 
     .update(leads)
     .set({ stageId, updatedAt: new Date(), ...(sortOrder != null ? { sortOrder } : {}), ...(old.stageId !== stageId ? { probability: stage.probability } : {}) })
     .where(eq(leads.id, id));
-  if (old.stageId !== stageId) await log(id, me.id, `Stage: ${old.stage.name} → ${stage.name}`);
-  refresh(id);
-}
-
-export async function markWon(id: number) {
-  const me = await requireUser();
-  await guardLead(me, id);
-  const now = new Date();
-  const cur = await db.query.leads.findFirst({ where: eq(leads.id, id), columns: { tags: true, createdAt: true } });
-  // "order received in FY" label is added automatically
-  const tags = joinTags([...tagList(cur?.tags ?? null).filter((t) => !/^OR FY/i.test(t)), orderTag(now)]);
-  await db.update(leads).set({ status: "won", probability: 100, closedAt: now, tags, updatedAt: now }).where(eq(leads.id, id));
-  await log(id, me.id, `🎉 Marked as WON${cur ? ` — ${Math.max(0, Math.floor((+now - +cur.createdAt) / 864e5))} days from creation` : ""}`);
+  if (old.stageId !== stageId) { await log(id, me.id, `Stage: ${old.stage.name} → ${stage.name}`); await runPlaybooks(id, "stage", me.id, stageId); }
   refresh(id);
 }
 
@@ -195,14 +190,16 @@ export async function createActivity(_p: { ok?: boolean; error?: string } | unde
     if (open.length === 1) d.leadId = open[0]!.id;
   }
   const when = d.dueAt ?? new Date();
-  await db.insert(activities).values({
+  const [created] = await db.insert(activities).values({
     ...d,
     customerId,
     userId: d.userId ?? me.id,
     createdById: me.id,
     dueAt: when,
     doneAt: done ? (+when <= Date.now() ? when : new Date()) : null, // work logged for earlier today keeps its time
-  });
+  }).returning({ id: activities.id });
+  // planned something for a colleague → it lands in their bell as well as their calendar
+  if (!done && d.userId && d.userId !== me.id) await notify({ userId: d.userId, kind: "reminder", fromUserId: me.id, title: `${me.name} planned for you: ${d.summary}`, body: `Due ${localDateKey(when)}`, href: `/activities/${created!.id}`, leadId: d.leadId ?? null });
   if (done) await followUp(me.id, { ...d, customerId }, fd);
   if (d.leadId) {
     await db.update(leads).set({ updatedAt: new Date() }).where(eq(leads.id, d.leadId));

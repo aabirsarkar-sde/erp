@@ -16,6 +16,7 @@ export const ACTIVITY_META: Record<ActivityType, { label: string; emoji: string 
   meeting: { label: "Meeting", emoji: "🤝" },
   visit: { label: "Site visit", emoji: "🏭" },
   email: { label: "Email", emoji: "✉️" },
+  whatsapp: { label: "WhatsApp", emoji: "💬" },
   todo: { label: "To-do", emoji: "✅" },
 };
 
@@ -27,7 +28,7 @@ export const quoteRef = (n: string, rev: number) => (rev ? `${n} R${rev}` : n);
 export const tagList = (t: string | null) => (t ? t.split(",").map((x) => x.trim()).filter(Boolean) : []);
 
 // client-safe copy (avoid importing the db schema into browser bundles)
-export const ACTIVITY_TYPE_LIST = ["call", "meeting", "visit", "email", "todo"] as const;
+export const ACTIVITY_TYPE_LIST = ["call", "meeting", "visit", "email", "whatsapp", "todo"] as const;
 
 export const PROPOSAL_META: Record<string, { label: string; cls: string }> = {
   not_started: { label: "Not started", cls: "bg-slate-100 text-slate-600" },
@@ -75,3 +76,47 @@ export const ageTone = (days: number) => (days > 90 ? "bg-red-50 text-red-700" :
 export function missingContact(l: { contactName: string | null; phone: string | null; email: string | null; address: string | null }) {
   return ([["contactName", "contact person"], ["phone", "phone"], ["email", "email"], ["address", "address"]] as const).filter(([k]) => !l[k]?.trim()).map(([, label]) => label);
 }
+
+// ---- activity status colours, used the same way everywhere (calendar, day view, opportunity history)
+export type ActState = "planned" | "overdue" | "done";
+const IST = 330 * 60_000;
+/** done → green · past its time and not done → red · still to come → blue. Untimed (midnight) items turn red the day after. */
+export function actState(a: { dueAt: Date | null; doneAt: Date | null }, now = Date.now()): ActState {
+  if (a.doneAt) return "done";
+  if (!a.dueAt) return "planned";
+  const due = +new Date(a.dueAt);
+  const untimed = (due + IST) % 86_400_000 === 0;
+  const todayStart = now - ((now + IST) % 86_400_000);
+  return (untimed ? due < todayStart : due < now) ? "overdue" : "planned";
+}
+export const ACT_STATE: Record<ActState, { label: string; chip: string; block: string; dot: string; text: string }> = {
+  planned: { label: "Planned", chip: "bg-sky-50 text-sky-900 ring-1 ring-inset ring-sky-200", block: "bg-sky-50 border-sky-500 text-sky-900", dot: "bg-sky-500", text: "text-sky-700" },
+  done: { label: "Done", chip: "bg-emerald-50 text-emerald-900 ring-1 ring-inset ring-emerald-200", block: "bg-emerald-50 border-emerald-500 text-emerald-900", dot: "bg-emerald-500", text: "text-emerald-700" },
+  overdue: { label: "Overdue — report pending", chip: "bg-rose-50 text-rose-900 ring-1 ring-inset ring-rose-200", block: "bg-rose-50 border-rose-500 text-rose-900", dot: "bg-rose-500", text: "text-rose-700" },
+};
+export const EVENT_CLS = "bg-violet-50 border-violet-400 text-violet-900";
+
+// ---- Raybon structure: business lines and forecast categories
+export const SEGMENTS = ["Water treatment (RO / ZLD)", "Membranes & spares", "Chemicals", "O&M / AMC", "Evaporators / MEE"];
+export const FORECAST_META: Record<string, { label: string; cls: string; hint: string }> = {
+  commit: { label: "Commit", cls: "bg-emerald-50 text-emerald-800", hint: "Will close in the month shown" },
+  best_case: { label: "Best case", cls: "bg-sky-50 text-sky-800", hint: "Could close if things go well" },
+  pipeline: { label: "Pipeline", cls: "bg-slate-100 text-slate-700", hint: "Early — counted only as weighted value" },
+  omitted: { label: "Omitted", cls: "bg-slate-50 text-slate-400", hint: "Left out of the forecast" },
+};
+export const TRIAL_STATUS_META: Record<string, { label: string; cls: string }> = {
+  planned: { label: "Planned", cls: "bg-sky-50 text-sky-800" },
+  running: { label: "Running", cls: "bg-amber-50 text-amber-800" },
+  success: { label: "Successful", cls: "bg-emerald-50 text-emerald-800" },
+  failed: { label: "Failed", cls: "bg-rose-50 text-rose-800" },
+  cancelled: { label: "Cancelled", cls: "bg-slate-100 text-slate-500" },
+};
+/** suggested pipeline for an industrial B2B sale */
+export const RAYBON_STAGES = [
+  { name: "Enquiry", probability: 10, color: "sky" },
+  { name: "Technical evaluation", probability: 20, color: "indigo" },
+  { name: "Trial", probability: 35, color: "violet" },
+  { name: "Quotation", probability: 50, color: "amber" },
+  { name: "Negotiation", probability: 70, color: "red" },
+];
+export const TRIAL_KINDS = ["Water analysis", "Jar test", "Sample trial", "Pilot trial", "Plant trial", "Membrane autopsy"];

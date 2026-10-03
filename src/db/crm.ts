@@ -14,6 +14,24 @@ export const crmStages = sqliteTable("crm_stages", {
 });
 
 export const LEAD_STATUS = ["open", "won", "lost"] as const;
+export const FORECAST_CATS = ["pipeline", "best_case", "commit", "omitted"] as const;
+
+// The customer's plants / sites we sell into (company → site → application). Separate from the helpdesk's installed plants.
+export const sites = sqliteTable(
+  "sites",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    customerId: integer("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+    name: text("name").notNull(), // e.g. Caustic soda plant, Bharuch
+    city: text("city"),
+    industry: text("industry"), // chlor-alkali, pharma, textile …
+    applications: text("applications"), // comma separated: Brine clarification, ETP, Cooling tower …
+    capacity: text("capacity"),
+    notes: text("notes"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("sites_customer").on(t.customerId)],
+);
 export const PROPOSAL_STATUS = ["not_started", "preparing", "submitted", "revised", "under_negotiation", "accepted", "rejected"] as const;
 
 export const leads = sqliteTable(
@@ -35,6 +53,10 @@ export const leads = sqliteTable(
     city: text("city"),
     address: text("address"),
     capacity: text("capacity"), // e.g. "450 KLD"
+    siteId: integer("site_id").references(() => sites.id, { onDelete: "set null" }), // the customer's plant / site
+    application: text("application"), // e.g. Brine clarification, Cooling tower blowdown
+    segment: text("segment"), // business line: Water treatment, Membranes, Chemicals, O&M …
+    forecast: text("forecast", { enum: FORECAST_CATS }).notNull().default("pipeline"),
     source: text("source"),
     expectedRevenue: integer("expected_revenue").notNull().default(0), // rupees
     probability: integer("probability").notNull().default(10),
@@ -75,7 +97,7 @@ export const leadMembers = sqliteTable(
   (t) => [primaryKey({ columns: [t.leadId, t.userId] })],
 );
 
-export const ACTIVITY_TYPES = ["call", "meeting", "visit", "email", "todo"] as const;
+export const ACTIVITY_TYPES = ["call", "meeting", "visit", "email", "whatsapp", "todo"] as const;
 export type ActivityType = (typeof ACTIVITY_TYPES)[number];
 
 export const activities = sqliteTable(
@@ -97,9 +119,10 @@ export const activities = sqliteTable(
     createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
     dueAt: integer("due_at", { mode: "timestamp" }),
     doneAt: integer("done_at", { mode: "timestamp" }),
+    externalId: text("external_id"), // captured email / Outlook meeting id — stops duplicates
     createdAt: createdAt(),
   },
-  (t) => [index("activities_user").on(t.userId, t.doneAt), index("activities_lead").on(t.leadId)],
+  (t) => [index("activities_user").on(t.userId, t.doneAt), index("activities_lead").on(t.leadId), uniqueIndex("activities_external").on(t.externalId)],
 );
 
 export const leadNotes = sqliteTable(
@@ -175,6 +198,8 @@ export const leadsRelations = relations(leads, ({ one, many }) => ({
   notes: many(leadNotes),
   members: many(leadMembers),
   quotations: many(quotations),
+  site: one(sites, { fields: [leads.siteId], references: [sites.id] }),
+  trials: many(trials),
 }));
 export const activitiesRelations = relations(activities, ({ one }) => ({
   lead: one(leads, { fields: [activities.leadId], references: [leads.id] }),
@@ -214,3 +239,173 @@ export const leadMembersRelations = relations(leadMembers, ({ one }) => ({
   lead: one(leads, { fields: [leadMembers.leadId], references: [leads.id] }),
   user: one(users, { fields: [leadMembers.userId], references: [users.id] }),
 }));
+
+// ---------- KPI / KRA: targets the sales head sets, progress filled in automatically (or by hand) ----------
+export const KPI_PERIODS = ["daily", "weekly", "monthly"] as const;
+export type KpiPeriod = (typeof KPI_PERIODS)[number];
+export const kpiDefs = sqliteTable("kpi_defs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  kind: text("kind", { enum: ["kpi", "kra"] }).notNull().default("kpi"),
+  period: text("period", { enum: KPI_PERIODS }).notNull().default("daily"),
+  metric: text("metric").notNull().default("manual"), // see KPI_METRICS in lib/crm/kpi-meta
+  target: real("target").notNull().default(0), // default target for every salesperson
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: createdAt(),
+});
+/** per-person target (overrides kpi_defs.target; 0 = not applicable to this person) */
+export const kpiTargets = sqliteTable(
+  "kpi_targets",
+  {
+    kpiId: integer("kpi_id").notNull().references(() => kpiDefs.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    target: real("target").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.kpiId, t.userId] })],
+);
+/** values typed in by hand, for KPIs that the system can't count itself */
+export const kpiValues = sqliteTable(
+  "kpi_values",
+  {
+    kpiId: integer("kpi_id").notNull().references(() => kpiDefs.id, { onDelete: "cascade" }),
+    userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+    period: text("period").notNull(), // 2026-10-03 · week starting 2026-09-28 · 2026-10
+    value: real("value").notNull().default(0),
+    note: text("note"),
+    enteredById: integer("entered_by_id").references(() => users.id, { onDelete: "set null" }),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+  },
+  (t) => [primaryKey({ columns: [t.kpiId, t.userId, t.period] })],
+);
+
+// ---------- Saved dashboards: each person keeps their own set of report boards ----------
+export const dashboards = sqliteTable("dashboards", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: text("name").notNull(),
+  shared: integer("shared", { mode: "boolean" }).notNull().default(false), // visible to everyone in sales
+  widgets: text("widgets").notNull().default("[]"), // JSON Widget[] (lib/crm/dashboards)
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: createdAt(),
+});
+
+// ---------- Templates: WhatsApp / email messages with {{placeholders}} ----------
+export const TEMPLATE_KINDS = ["whatsapp", "email"] as const;
+export const templates = sqliteTable("templates", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  kind: text("kind", { enum: TEMPLATE_KINDS }).notNull().default("whatsapp"),
+  name: text("name").notNull(),
+  category: text("category"), // Follow-up, Ad, Emailer, Introduction …
+  subject: text("subject"), // email only
+  body: text("body").notNull(),
+  createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: createdAt(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull().default(sql`(unixepoch())`),
+});
+
+// ---------- Enquiries inbox: website form, emails, WhatsApp — one place before they become leads ----------
+export const ENQUIRY_SOURCES = ["website", "email", "whatsapp", "phone", "other"] as const;
+export const ENQUIRY_STATUS = ["new", "converted", "added", "dismissed"] as const;
+export const enquiries = sqliteTable(
+  "enquiries",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    source: text("source", { enum: ENQUIRY_SOURCES }).notNull().default("website"),
+    status: text("status", { enum: ENQUIRY_STATUS }).notNull().default("new"),
+    name: text("name"),
+    company: text("company"),
+    email: text("email"),
+    phone: text("phone"),
+    city: text("city"),
+    product: text("product"),
+    subject: text("subject"),
+    message: text("message"),
+    externalId: text("external_id"), // e-mail Message-ID etc. — stops duplicates
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }), // matched by email / phone
+    assignedToId: integer("assigned_to_id").references(() => users.id, { onDelete: "set null" }),
+    leadId: integer("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    handledById: integer("handled_by_id").references(() => users.id, { onDelete: "set null" }),
+    handledAt: integer("handled_at", { mode: "timestamp" }),
+    createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("enquiries_status").on(t.status, t.createdAt), uniqueIndex("enquiries_external").on(t.externalId)],
+);
+
+// ---------- Odoo import: remembers which Odoo record became which row, so re-runs update instead of duplicating ----------
+export const importMap = sqliteTable(
+  "import_map",
+  {
+    source: text("source").notNull(), // "odoo"
+    model: text("model").notNull(), // res.partner, crm.lead …
+    externalId: integer("external_id").notNull(),
+    localId: integer("local_id").notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.source, t.model, t.externalId] })],
+);
+
+// ---------- Technical evaluation: water analysis, jar tests, pilot / sample trials ----------
+export const TRIAL_STATUS = ["planned", "running", "success", "failed", "cancelled"] as const;
+export const trials = sqliteTable(
+  "trials",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    leadId: integer("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull().default("Jar test"),
+    product: text("product"), // e.g. Magnafloc 611 replacement, antiscalant X
+    status: text("status", { enum: TRIAL_STATUS }).notNull().default("planned"),
+    startAt: integer("start_at", { mode: "timestamp" }),
+    endAt: integer("end_at", { mode: "timestamp" }),
+    result: text("result"),
+    createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("trials_lead").on(t.leadId)],
+);
+
+// ---------- Orders: the PO that closes an opportunity ----------
+export const orders = sqliteTable(
+  "orders",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    leadId: integer("lead_id").references(() => leads.id, { onDelete: "set null" }),
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    quotationId: integer("quotation_id").references(() => quotations.id, { onDelete: "set null" }),
+    poNumber: text("po_number"),
+    poDate: integer("po_date", { mode: "timestamp" }).notNull(),
+    value: integer("value").notNull().default(0), // ₹ before tax
+    segment: text("segment"),
+    ownerId: integer("owner_id").references(() => users.id, { onDelete: "set null" }),
+    notes: text("notes"),
+    createdById: integer("created_by_id").references(() => users.id, { onDelete: "set null" }),
+    createdAt: createdAt(),
+  },
+  (t) => [index("orders_customer").on(t.customerId), index("orders_date").on(t.poDate)],
+);
+
+// ---------- Playbooks: automatic task chains ("membrane enquiry → water analysis → selection → quotation → follow-up") ----------
+export const PLAYBOOK_TRIGGERS = ["created", "stage"] as const;
+export const playbooks = sqliteTable("playbooks", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  trigger: text("trigger", { enum: PLAYBOOK_TRIGGERS }).notNull().default("created"),
+  stageId: integer("stage_id").references(() => crmStages.id, { onDelete: "cascade" }), // for trigger = stage
+  matchProduct: text("match_product"), // words to look for in product / title / application (comma = any)
+  matchSegment: text("match_segment"),
+  steps: text("steps").notNull().default("[]"), // JSON PlaybookStep[] (lib/crm/playbook-meta)
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
+  createdAt: createdAt(),
+});
+export const playbookRuns = sqliteTable(
+  "playbook_runs",
+  {
+    playbookId: integer("playbook_id").notNull().references(() => playbooks.id, { onDelete: "cascade" }),
+    leadId: integer("lead_id").notNull().references(() => leads.id, { onDelete: "cascade" }),
+    createdAt: createdAt(),
+  },
+  (t) => [primaryKey({ columns: [t.playbookId, t.leadId] })],
+);
+
+export const sitesRelations = relations(sites, ({ one }) => ({ customer: one(customers, { fields: [sites.customerId], references: [customers.id] }) }));
+export const trialsRelations = relations(trials, ({ one }) => ({ lead: one(leads, { fields: [trials.leadId], references: [leads.id] }) }));

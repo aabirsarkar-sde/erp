@@ -25,7 +25,7 @@ export async function salesReport(f: SalesFilters, me: CurrentUser) {
   const ls = leadScope(me); if (ls) lc.push(ls);
   if (userId) lc.push(eq(leads.ownerId, userId));
   const allLeadsQ = db
-    .select({ id: leads.id, title: leads.title, kind: leads.kind, status: leads.status, stage: crmStages.name, stageSeq: crmStages.sequence, value: leads.expectedRevenue, probability: leads.probability, source: leads.source, proposalStatus: leads.proposalStatus, lostReason: leads.lostReason, product: leads.product, tags: leads.tags, city: leads.city, createdAt: leads.createdAt, closedAt: leads.closedAt, convertedAt: leads.convertedAt, ownerId: leads.ownerId, owner: owner.name, customer: customers.name })
+    .select({ id: leads.id, title: leads.title, kind: leads.kind, status: leads.status, stage: crmStages.name, stageSeq: crmStages.sequence, value: leads.expectedRevenue, probability: leads.probability, source: leads.source, proposalStatus: leads.proposalStatus, lostReason: leads.lostReason, product: leads.product, tags: leads.tags, city: leads.city, createdAt: leads.createdAt, closedAt: leads.closedAt, convertedAt: leads.convertedAt, ownerId: leads.ownerId, owner: owner.name, customer: customers.name, segment: leads.segment, expectedCloseAt: leads.expectedCloseAt, forecast: leads.forecast })
     .from(leads).leftJoin(crmStages, eq(crmStages.id, leads.stageId)).leftJoin(owner, eq(owner.id, leads.ownerId)).leftJoin(customers, eq(customers.id, leads.customerId))
     .where(lc.length ? and(...lc) : undefined);
   const inP = (d: Date | null) => !!d && (!from || +d >= +from) && (!to || +d < +to);

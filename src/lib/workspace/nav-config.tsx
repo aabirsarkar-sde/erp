@@ -1,11 +1,12 @@
 import { Sparkle } from "@/components/workspace/ai-ui";
-import { IconHome, IconTicket, IconBuilding, IconCog, IconChart, IconFunnel, IconCheck, IconDoc, IconCalendar, IconChat, IconFolder, IconTrend, IconFactory, IconInbox } from "@/components/ui/icons";
+import { IconHome, IconTicket, IconBuilding, IconCog, IconChart, IconFunnel, IconCheck, IconDoc, IconCalendar, IconChat, IconFolder, IconTrend, IconFactory, IconInbox, IconTarget, IconGrid, IconTemplate } from "@/components/ui/icons";
 
 export type Item = { href: string; label: string; icon: (p: { className?: string }) => React.ReactElement; exact?: boolean; badge?: "chat" };
 const NAV: { title?: string; items: Item[]; admin?: boolean; dept?: "crm" | "hd" }[] = [
   { items: [{ href: "/", label: "Dashboard", icon: IconHome, exact: true }, { href: "/ask", label: "Ask AI", icon: Sparkle }, { href: "/insights", label: "Insights", icon: IconTrend }] },
   { title: "Helpdesk (O&M)", dept: "hd", items: [{ href: "/helpdesk", label: "Helpdesk dashboard", icon: IconTrend }, { href: "/tickets", label: "Tickets", icon: IconTicket }, { href: "/reports", label: "SLA reports", icon: IconChart }] },
-  { title: "Sales & Marketing", dept: "crm", items: [{ href: "/crm/leads", label: "Leads", icon: IconInbox }, { href: "/crm", label: "Opportunities", icon: IconFunnel }, { href: "/activities", label: "Activities & visits", icon: IconCheck }, { href: "/daily-report", label: "Daily report", icon: IconDoc }, { href: "/quotations", label: "Quotations", icon: IconDoc }, { href: "/sales-reports", label: "Sales reports", icon: IconChart }] },
+  { title: "Sales & Marketing", dept: "crm", items: [{ href: "/enquiries", label: "Enquiries", icon: IconInbox }, { href: "/crm/leads", label: "Leads", icon: IconInbox }, { href: "/crm", label: "Opportunities", icon: IconFunnel }, { href: "/activities", label: "Activities & visits", icon: IconCheck }, { href: "/daily-report", label: "Daily report", icon: IconDoc }, { href: "/quotations", label: "Quotations", icon: IconDoc }, { href: "/templates", label: "Templates & collateral", icon: IconTemplate }, { href: "/playbooks", label: "Playbooks", icon: IconCheck }] },
+  { title: "Performance", dept: "crm", items: [{ href: "/kpi", label: "KPI & KRA", icon: IconTarget }, { href: "/forecast", label: "Forecast", icon: IconTrend }, { href: "/dashboards", label: "Dashboards", icon: IconGrid }, { href: "/sales-reports", label: "Sales reports", icon: IconChart }] },
   { title: "Workspace", items: [{ href: "/calendar", label: "Calendar", icon: IconCalendar }, { href: "/tasks", label: "Tasks", icon: IconCheck }, { href: "/discuss", label: "Discuss", icon: IconChat, badge: "chat" }, { href: "/documents", label: "Documents", icon: IconFolder }] },
   { title: "Directory", items: [{ href: "/customers", label: "Customers", icon: IconBuilding }] },
   { title: "O&M sites", dept: "hd", items: [{ href: "/plants", label: "Plants", icon: IconFactory }] },

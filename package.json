@@ -1,6 +1,6 @@
 {
   "name": "raybon-erp",
-  "version": "1.2.0",
+  "version": "1.4.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,9 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "tsx --test tests/unit/*.test.ts",
-    "test:e2e": "node tests/e2e/crm-and-access.e2e.mjs && node tests/e2e/helpdesk.e2e.mjs && node tests/e2e/crm-workflow.e2e.mjs",
+    "test:e2e": "node tests/e2e/crm-and-access.e2e.mjs && node tests/e2e/helpdesk.e2e.mjs && node tests/e2e/crm-workflow.e2e.mjs && node tests/e2e/crm-engage.e2e.mjs && node tests/e2e/crm-structure.e2e.mjs",
+    "test:odoo": "node tests/integration/odoo-import.test.mjs",
+    "odoo:import": "tsx scripts/odoo-import.ts",
     "check": "npm run lint && npm run typecheck && npm test",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts --force",

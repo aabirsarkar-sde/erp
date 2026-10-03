@@ -68,7 +68,8 @@ for (let i = 0; i < 3; i++) { // retry if the form was filled before the page fi
 ok("task added to opportunity", true);
 
 // ---- won → OR FY label + TAT
-await clickUntil(p, "button:text-is('Won')", "text=/Won in \\d+ days/");
+await p.click("[data-testid=won]"); // Won asks for the PO details (all optional)
+await clickUntil(p, "button:has-text('Mark as won')", "text=/Won in \\d+ days/");
 ok("won adds OR FY label", (await main()).includes("OR FY26-27"));
 
 // ---- calendar day: plan / work done / diary

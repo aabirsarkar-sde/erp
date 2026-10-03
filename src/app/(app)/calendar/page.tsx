@@ -10,7 +10,8 @@ import { PageHeader, LinkButton } from "@/components/ui/ui";
 import { ParamSelect } from "@/components/ui/url-filters";
 import { CopyField } from "@/components/ui/copy-field";
 import { IconPlus } from "@/components/ui/icons";
-import { ACTIVITY_META } from "@/lib/crm/meta";
+import { ACTIVITY_META, ACT_STATE, EVENT_CLS, actState } from "@/lib/crm/meta";
+import { ActivityLegend } from "@/components/crm/activity-legend";
 import { typeMeta, ticketRef } from "@/lib/helpdesk/constants";
 import { fmtTat } from "@/lib/core/format";
 import { appUrl } from "@/lib/core/mail";
@@ -23,7 +24,6 @@ export const dynamic = "force-dynamic";
 const HOUR_PX = 44, FIRST_H = 7, LAST_H = 21;
 const DOW = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const COLORS = ["bg-sky-100 border-sky-400 text-sky-900", "bg-violet-100 border-violet-400 text-violet-900", "bg-amber-100 border-amber-400 text-amber-900", "bg-emerald-100 border-emerald-400 text-emerald-900", "bg-rose-100 border-rose-400 text-rose-900", "bg-teal-100 border-teal-400 text-teal-900"];
 
 type Ev = { id: number; title: string; startAt: Date; endAt: Date; allDay: boolean; location: string | null; ownerId: number | null };
 type Act = { id: number; type: keyof typeof ACTIVITY_META; summary: string; dueAt: Date | null; leadId: number | null; doneAt: Date | null; durationMin: number | null; location: string | null };
@@ -72,7 +72,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   };
   const dayList = Array.from({ length: days }, (_, i) => new Date(+from + i * DAY_MS));
   const todayKey = localDateKey(new Date());
-  const colorOf = (e: Ev) => COLORS[(e.ownerId ?? e.id) % COLORS.length]!;
+  const colorOf = (_e: Ev) => EVENT_CLS;
   const evsOn = (d: Date) => (showEvents ? evs.filter((e) => +e.startAt < +d + DAY_MS && +e.endAt > +d) : []);
   const actsOn = (d: Date) => (showEvents ? acts.filter((a) => a.dueAt && localDateKey(a.dueAt) === localDateKey(d)) : []) as Act[];
   const step = view === "week" ? 7 : 30;
@@ -82,8 +82,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const feed = `${appUrl()}/api/calendar/${token}.ics`;
 
   const ActChip = ({ x }: { x: Act }) => (
-    <Link href={`/activities/${x.id}`} className={`block truncate rounded px-1.5 py-0.5 text-[11px] hover:bg-slate-200 ${x.doneAt ? "bg-emerald-50 text-emerald-800 line-through decoration-emerald-400" : "bg-slate-100 text-slate-700"}`} title={x.summary}>
-      {x.doneAt ? "✓" : ACTIVITY_META[x.type].emoji} {timed(x) ? `${fmtTime(x.dueAt!)} ` : ""}{x.summary}
+    <Link href={`/activities/${x.id}`} data-state={actState(x)} className={`block truncate rounded px-1.5 py-0.5 text-[11px] hover:brightness-95 ${ACT_STATE[actState(x)].chip}`} title={`${ACT_STATE[actState(x)].label}: ${x.summary}`}>
+      {x.doneAt ? "✓" : actState(x) === "overdue" ? "!" : ACTIVITY_META[x.type].emoji} {timed(x) ? `${fmtTime(x.dueAt!)} ` : ""}{x.summary}
     </Link>
   );
 
@@ -103,6 +103,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         </div>
         <ParamSelect name="show" fallback="all" options={[["all", hasHd && hasCrm ? "Complaints + activities" : "Everything"], ...(hasHd ? [["tickets", "Complaints only"]] : []), ["events", "Meetings & activities only"]] as [string, string][]} />
         {canAll && <ParamSelect name="who" fallback="me" options={[["me", "My calendar"], ["all", "Everyone"], ...lk.users.filter((u) => u.id !== me.id).map((u) => [String(u.id), u.name] as [string, string])]} />}
+        {hasCrm && <ActivityLegend className="ml-auto" />}
       </div>
 
       {view === "week" ? (
@@ -133,7 +134,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                 type Blk = { key: string; href: string; title: string; sub: string; startAt: Date; endAt: Date; cls: string };
                 const dayEvs: Blk[] = [
                   ...evsOn(d).filter((e) => !e.allDay).map((e) => ({ key: `e${e.id}`, href: `/calendar/${e.id}`, title: e.title, sub: `${fmtTime(e.startAt)}${e.location ? ` · ${e.location}` : ""}`, startAt: e.startAt, endAt: e.endAt, cls: colorOf(e) })),
-                  ...actsOn(d).filter(timed).map((x) => ({ key: `a${x.id}`, href: `/activities/${x.id}`, title: `${x.doneAt ? "✓" : ACTIVITY_META[x.type].emoji} ${x.summary}`, sub: `${fmtTime(x.dueAt!)}${x.location ? ` · ${x.location}` : ""}`, startAt: x.dueAt!, endAt: new Date(+x.dueAt! + (x.durationMin || 30) * 60e3), cls: x.doneAt ? "bg-emerald-50 border-emerald-500 text-emerald-900" : "bg-white border-slate-500 text-slate-800 ring-1 ring-slate-200" })),
+                  ...actsOn(d).filter(timed).map((x) => ({ key: `a${x.id}`, href: `/activities/${x.id}`, title: `${x.doneAt ? "✓" : ACTIVITY_META[x.type].emoji} ${x.summary}`, sub: `${fmtTime(x.dueAt!)}${x.location ? ` · ${x.location}` : ""}`, startAt: x.dueAt!, endAt: new Date(+x.dueAt! + (x.durationMin || 30) * 60e3), cls: ACT_STATE[actState(x)].block })),
                 ].sort((x, y) => +x.startAt - +y.startAt);
                 // simple lane assignment for overlaps
                 const lanes: number[] = []; const laneOf = new Map<string, number>();

@@ -4,12 +4,15 @@ import { db, leads, tasks } from "@/db";
 import { leadScope } from "@/lib/core/access";
 import { lookups } from "@/lib/core/lookups";
 import { personDay } from "@/lib/crm/daily";
-import { ACTIVITY_META } from "@/lib/crm/meta";
+import { ACTIVITY_META, ACT_STATE, actState } from "@/lib/crm/meta";
+import { ActivityLegend } from "@/components/crm/activity-legend";
 import { DAY_MS, fromLocalInput, localDateKey, localParts, fmtTime } from "@/lib/core/tz";
 import { PageHeader } from "@/components/ui/ui";
 import { ParamSelect } from "@/components/ui/url-filters";
 import { QuickEntry } from "@/components/crm/quick-entry";
 import { DiaryBox } from "@/components/crm/diary-box";
+import { KpiStrip } from "@/components/crm/kpi-strip";
+import { myKpis } from "@/lib/crm/kpi";
 import type { CurrentUser } from "@/lib/core/auth";
 
 const DOW = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -22,20 +25,21 @@ export async function DayView({ me, sp }: { me: CurrentUser; sp: Record<string, 
   const canAll = me.crmAccess === "all" || me.role === "admin";
   const who = canAll && sp.who && sp.who !== "me" ? Number(sp.who) || me.id : me.id;
   const own = who === me.id;
-  const [d, lk, openLeads, dueTasks] = await Promise.all([
+  const [d, lk, openLeads, dueTasks, kpis] = await Promise.all([
     personDay([who], day, me),
     lookups(),
     db.select({ id: leads.id, title: leads.title, customerId: leads.customerId }).from(leads).where(and(eq(leads.status, "open"), leadScope(me))).orderBy(asc(leads.title)),
     db.select({ id: tasks.id, title: tasks.title, dueAt: tasks.dueAt }).from(tasks).where(and(eq(tasks.assigneeId, who), ne(tasks.status, "done"), gte(tasks.dueAt, fromLocalInput(day)!), lt(tasks.dueAt, new Date(+fromLocalInput(day)! + DAY_MS)))),
+    myKpis(who, anchor),
   ]);
   const p = localParts(anchor);
   const link = (date: string, extra: Record<string, string> = {}) => `/calendar?${new URLSearchParams({ ...(Object.fromEntries(Object.entries(sp).filter(([, v]) => v)) as Record<string, string>), view: "day", date, ...extra })}`;
   const prev = localDateKey(+anchor - DAY_MS), next = localDateKey(+anchor + DAY_MS), today = localDateKey(new Date());
   const diary = d.diary[0]?.body ?? "";
   const planItems = [
-    ...d.events.map((e) => ({ key: `e${e.id}`, at: e.startAt, allDay: e.allDay, href: `/calendar/${e.id}`, icon: "🗓", title: e.title, sub: e.location })),
-    ...dueTasks.map((t) => ({ key: `t${t.id}`, at: t.dueAt!, allDay: true, href: `/tasks?open=${t.id}`, icon: "☑", title: t.title, sub: "Task due" })),
-    ...d.planned.map((a) => ({ key: `a${a.id}`, at: a.dueAt!, allDay: false, href: `/activities/${a.id}`, icon: ACTIVITY_META[a.type].emoji, title: a.summary, sub: [a.customer, a.lead].filter(Boolean).join(" · ") })),
+    ...d.events.map((e) => ({ key: `e${e.id}`, at: e.startAt, allDay: e.allDay, href: `/calendar/${e.id}`, icon: "🗓", title: e.title, sub: e.location, bar: "bg-violet-400", state: null as string | null })),
+    ...dueTasks.map((t) => ({ key: `t${t.id}`, at: t.dueAt!, allDay: true, href: `/tasks?open=${t.id}`, icon: "☑", title: t.title, sub: "Task due", bar: "bg-slate-300", state: null })),
+    ...d.planned.map((a) => { const st = actState(a); return { key: `a${a.id}`, at: a.dueAt!, allDay: false, href: `/activities/${a.id}`, icon: ACTIVITY_META[a.type].emoji, title: a.summary, sub: [st === "overdue" ? "Overdue — write the report" : null, a.customer, a.lead].filter(Boolean).join(" · "), bar: ACT_STATE[st].dot, state: st as string | null }; }),
   ].sort((x, y) => +x.at - +y.at);
   const card = "card flex flex-col";
   const head = "flex items-center justify-between border-b border-slate-100 px-4 py-3";
@@ -55,9 +59,11 @@ export async function DayView({ me, sp }: { me: CurrentUser; sp: Record<string, 
           ))}
         </div>
         {canAll && <ParamSelect name="who" fallback="me" options={[["me", "My day"], ...lk.users.filter((u) => u.id !== me.id).map((u) => [String(u.id), u.name] as [string, string])]} />}
-        {canAll && <Link href={`/daily-report?date=${day}`} className="btn-secondary ml-auto">Team daily report</Link>}
+        <ActivityLegend className="ml-auto" />
+        {canAll && <Link href={`/daily-report?date=${day}`} className="btn-secondary">Team daily report</Link>}
       </div>
 
+      <KpiStrip items={kpis} title={own ? (day === today ? "My targets today" : `My targets · ${day}`) : "Targets"} date={day} />
       <div className="grid gap-5 lg:grid-cols-3">
         <section className={card}>
           <div className={head}><h2 className="text-sm font-semibold">📋 Planner</h2><span className="text-xs text-slate-500">{planItems.length} planned</span></div>
@@ -65,9 +71,10 @@ export async function DayView({ me, sp }: { me: CurrentUser; sp: Record<string, 
             {planItems.length === 0 && <li className="px-4 py-3 text-sm text-slate-400">Nothing planned.</li>}
             {planItems.map((x) => (
               <li key={x.key}>
-                <Link href={x.href} className="flex gap-3 px-4 py-2.5 text-sm hover:bg-slate-50">
+                <Link href={x.href} data-state={x.state ?? undefined} className={`flex gap-3 px-4 py-2.5 text-sm hover:bg-slate-50 ${x.state === "overdue" ? "bg-rose-50/60" : ""}`}>
+                  <span className={`w-1 shrink-0 self-stretch rounded-full ${x.bar}`} />
                   <span className="w-14 shrink-0 text-xs text-slate-500">{x.allDay ? "All day" : fmtTime(x.at)}</span>
-                  <span className="min-w-0"><span className="block truncate font-medium">{x.icon} {x.title}</span>{x.sub && <span className="block truncate text-xs text-slate-500">{x.sub}</span>}</span>
+                  <span className="min-w-0"><span className="block truncate font-medium">{x.icon} {x.title}</span>{x.sub && <span className={`block truncate text-xs ${x.state === "overdue" ? "text-rose-700" : "text-slate-500"}`}>{x.sub}</span>}</span>
                 </Link>
               </li>
             ))}
@@ -81,7 +88,7 @@ export async function DayView({ me, sp }: { me: CurrentUser; sp: Record<string, 
             {d.done.length === 0 && <li className="px-4 py-3 text-sm text-slate-400">Nothing logged yet.</li>}
             {d.done.map((a) => (
               <li key={a.id}>
-                <Link href={`/activities/${a.id}`} className="block px-4 py-2.5 text-sm hover:bg-slate-50">
+                <Link href={`/activities/${a.id}`} data-state="done" className="block border-l-4 border-emerald-500 px-4 py-2.5 text-sm hover:bg-emerald-50/50">
                   <div className="flex gap-2"><span className="w-12 shrink-0 text-xs text-slate-500">{fmtTime(a.doneAt!)}</span><span className="min-w-0 font-medium">{ACTIVITY_META[a.type].emoji} {a.summary}</span></div>
                   <div className="ml-14 text-xs text-slate-500">{[a.customer, a.lead].filter(Boolean).join(" · ")}</div>
                   {a.outcome && <div className="ml-14 text-xs text-slate-700">→ {a.outcome}</div>}

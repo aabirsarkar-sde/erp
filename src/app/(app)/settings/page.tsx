@@ -9,7 +9,15 @@ import { Field } from "@/components/ui/ui";
 import { PRIORITIES } from "@/lib/helpdesk/constants";
 import { mailEnabled } from "@/lib/core/mail";
 import { aiConfig, aiEnabled } from "@/lib/ai/client";
-import { setAutoTriage, setHoEmails, saveCanned, deleteCanned, setDailyReportTo } from "@/app/actions/admin";
+import { setAutoTriage, setHoEmails, saveCanned, deleteCanned, setDailyReportTo, setNudgeRules, runNudgesNow, setEnquiryAssign, checkMailboxNow, setCaptureUsers } from "@/app/actions/admin";
+import { nudgeSettings } from "@/lib/crm/nudges";
+import { graphConfigured, graphInboxes, graphSender, mailboxStatus } from "@/lib/core/graph";
+import { RunButton } from "@/components/workspace/run-button";
+import { saveStage, moveStage, deleteStage, addRaybonStages } from "@/app/actions/structure";
+import { getStages } from "@/lib/crm/queries";
+import { RAYBON_STAGES, stageColor } from "@/lib/crm/meta";
+import { leads as leadsT } from "@/db";
+import { appUrl } from "@/lib/core/mail";
 import { getHoEmails } from "@/lib/helpdesk/notify";
 import { cannedResponses } from "@/db";
 import { db as _db, aiUsage, settings as settingsT } from "@/db";
@@ -33,6 +41,10 @@ export default async function SettingsPage() {
   const autoTriage = triageRow?.value !== "off";
   const [ho, canned, reportToRow] = await Promise.all([getHoEmails(), _db.select().from(cannedResponses), _db.query.settings.findFirst({ where: eq(settingsT.key, "daily_report_to") })]);
   const reportTo = reportToRow?.value ?? "";
+  const [nudgeCfg, enqRow, mbx, capRow] = await Promise.all([nudgeSettings(), _db.query.settings.findFirst({ where: eq(settingsT.key, "enquiry_assign_to") }), mailboxStatus(), _db.query.settings.findFirst({ where: eq(settingsT.key, "capture_users") })]);
+  const capSet = new Set((capRow?.value ?? "").split(",").map(Number).filter(Boolean));
+  const [stagesAll, stageCounts] = editionHasCrm ? await Promise.all([getStages(), _db.select({ s: leadsT.stageId, n: sql<number>`count(*)` }).from(leadsT).groupBy(leadsT.stageId)]) : [[], []];
+  const enqTo = new Set((enqRow?.value ?? "").split(",").map(Number).filter(Boolean));
   const [co, sla, us, ts, labelDefs] = await Promise.all([
     getCompany(),
     getSla(),
@@ -58,6 +70,7 @@ export default async function SettingsPage() {
                 <div className="min-w-0 flex-1 basis-40">
                   <div className={`text-sm font-medium ${u.active ? "" : "text-slate-400 line-through"}`}>{u.name}</div>
                   <div className="truncate text-xs text-slate-500">{u.email}</div>
+                  {u.id !== me.id && <a href={`/settings/handover?from=${u.id}`} className="text-[11px] text-brand-700 hover:underline">Hand over their work →</a>}
                 </div>
                 <input name="title" defaultValue={u.title ?? ""} placeholder="Title, e.g. Zonal Manager" className="input w-44 py-1.5 text-xs" />
                 {editionHasCrm && <label className="text-[11px] text-slate-500">Sales/CRM
@@ -146,6 +159,87 @@ export default async function SettingsPage() {
 
       </>}
       {editionHasCrm && (
+        <section className="card p-4 text-sm" data-testid="stages">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-semibold">Pipeline stages</h2>
+            {RAYBON_STAGES.some((r) => !stagesAll.some((x) => x.name.toLowerCase() === r.name.toLowerCase())) && <form action={addRaybonStages}><button className="btn-secondary py-1 text-xs">Add the suggested stages: {RAYBON_STAGES.map((r) => r.name).join(" → ")}</button></form>}
+          </div>
+          <p className="mb-3 mt-1 text-xs text-slate-500">Rename, reorder or remove stages. The % is the default probability when a deal enters the stage. Won / Lost are outcomes, not stages.</p>
+          <ul className="divide-y divide-slate-100">
+            {stagesAll.map((st, i) => {
+              const n = Number(stageCounts.find((x) => x.s === st.id)?.n ?? 0);
+              return (
+                <li key={st.id} className="flex flex-wrap items-center gap-2 py-2">
+                  <span className={`size-2.5 rounded-full ${stageColor(st.color).dot}`} />
+                  <form action={saveStage.bind(null, st.id)} className="flex flex-1 flex-wrap items-center gap-2">
+                    <input name="name" defaultValue={st.name} className="input w-56 py-1 text-sm" aria-label="Stage name" />
+                    <input name="probability" type="number" min={0} max={100} defaultValue={st.probability} className="input w-20 py-1 text-sm" aria-label="Probability" />
+                    <select name="color" defaultValue={st.color} className="input w-28 py-1 text-sm" aria-label="Colour">{["sky", "indigo", "violet", "amber", "red", "emerald", "slate"].map((c) => <option key={c}>{c}</option>)}</select>
+                    <button className="btn-secondary py-1 text-xs">Save</button>
+                  </form>
+                  <span className="text-xs text-slate-400">{n} deal{n === 1 ? "" : "s"}</span>
+                  <form action={moveStage.bind(null, st.id, -1)}><button disabled={i === 0} className="px-1 text-slate-400 hover:text-slate-800 disabled:opacity-30" title="Move up">↑</button></form>
+                  <form action={moveStage.bind(null, st.id, 1)}><button disabled={i === stagesAll.length - 1} className="px-1 text-slate-400 hover:text-slate-800 disabled:opacity-30" title="Move down">↓</button></form>
+                  <details className="relative"><summary className="cursor-pointer list-none text-xs text-slate-400 hover:text-red-600">Remove</summary>
+                    <form action={deleteStage.bind(null, st.id)} className="card absolute right-0 z-10 mt-1 w-60 space-y-2 p-3 shadow-lg">
+                      {n > 0 && <select name="moveTo" required className="input py-1 text-sm" aria-label="Move deals to"><option value="">Move its {n} deal(s) to…</option>{stagesAll.filter((x) => x.id !== st.id).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>}
+                      <button className="btn-primary w-full py-1 text-xs">Remove stage</button>
+                    </form>
+                  </details>
+                </li>
+              );
+            })}
+          </ul>
+          <form action={saveStage.bind(null, null)} className="mt-2 flex flex-wrap gap-2">
+            <input name="name" required placeholder="New stage" className="input w-56 py-1 text-sm" />
+            <input name="probability" type="number" min={0} max={100} defaultValue={20} className="input w-20 py-1 text-sm" />
+            <input type="hidden" name="color" value="slate" />
+            <button className="btn-primary py-1 text-xs">Add stage</button>
+          </form>
+        </section>
+      )}
+
+      {editionHasCrm && (
+        <section className="card p-4 text-sm">
+          <h2 className="font-semibold">AI follow-up suggestions</h2>
+          <p className="mb-2 text-xs text-slate-500">Every morning each salesperson gets a few suggestions in their bell (🔔) — e.g. &quot;it&apos;s been 9 days since the quotation to X, call today&quot; — with one-tap Call / WhatsApp / Email. Needs CRON_SECRET; wording uses the AI key when set.</p>
+          <form action={setNudgeRules} className="flex flex-wrap items-end gap-3">
+            <label className="text-xs text-slate-600">Days after a quotation / jar test<input name="quoteDays" type="number" min={1} max={90} defaultValue={nudgeCfg.quoteDays} className="input mt-1 w-28" /></label>
+            <label className="text-xs text-slate-600">Days with no contact at all<input name="silenceDays" type="number" min={1} max={180} defaultValue={nudgeCfg.silenceDays} className="input mt-1 w-28" /></label>
+            <label className="text-xs text-slate-600">Max suggestions per person per day<input name="perPerson" type="number" min={1} max={20} defaultValue={nudgeCfg.perPerson} className="input mt-1 w-28" /></label>
+            <button className="btn-primary">Save</button>
+          </form>
+          <div className="mt-3"><RunButton action={runNudgesNow} label="Send today's suggestions now" format="nudges" /></div>
+        </section>
+      )}
+
+      {editionHasCrm && (
+        <section className="card p-4 text-sm" data-testid="capture-settings">
+          <h2 className="font-semibold">Email capture — customer emails into the CRM automatically</h2>
+          <p className="mt-1 text-xs text-slate-500">Emails exchanged with <b>known customers</b> are added to that customer&apos;s opportunity (subject + first 1,500 characters). Internal mail and mail with unknown addresses is never stored.</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+            <li><b>BCC / forward (works for everyone):</b> BCC {graphInboxes()[0] ?? "the sales mailbox"} on an email to a customer, or forward a customer&apos;s email to it. Put <code>[OPP-123]</code> in the subject to file it on a specific opportunity.</li>
+            <li><b>Outlook capture (automatic):</b> tick the people below. Their sent and received mail and their meetings with customers are logged within minutes{graphConfigured() ? "" : " — switches on once Microsoft 365 is connected (needs Mail.ReadWrite and Calendars.Read)"}.</li>
+          </ul>
+          <form action={setCaptureUsers} className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+            {us.filter((u) => u.active && u.crmAccess !== "none").map((u) => <label key={u.id} className="flex items-center gap-1.5 text-xs"><input type="checkbox" name="userIds" value={u.id} defaultChecked={capSet.has(u.id)} />{u.name}</label>)}
+            <button className="btn-primary ml-auto">Save</button>
+          </form>
+        </section>
+      )}
+
+      {editionHasCrm && (
+        <section className="card p-4 text-sm">
+          <h2 className="font-semibold">New enquiries go to</h2>
+          <p className="mb-2 text-xs text-slate-500">Website, email and WhatsApp enquiries land in Enquiries. If the sender is an existing customer with an open opportunity, its owner is alerted; otherwise these people are (none ticked = all sales managers).</p>
+          <form action={setEnquiryAssign} className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {us.filter((u) => u.active && u.crmAccess !== "none").map((u) => <label key={u.id} className="flex items-center gap-1.5 text-xs"><input type="checkbox" name="userIds" value={u.id} defaultChecked={enqTo.has(u.id)} />{u.name}</label>)}
+            <button className="btn-primary ml-auto">Save</button>
+          </form>
+        </section>
+      )}
+
+      {editionHasCrm && (
         <section className="card p-4 text-sm">
           <h2 className="font-semibold">Daily sales report</h2>
           <p className="mb-2 text-xs text-slate-500">Every evening at 7:30 pm the team&apos;s planner, work done and diary are emailed to these addresses (blank = all admins). Needs email (SMTP) and CRON_SECRET set up.</p>
@@ -222,9 +316,14 @@ export default async function SettingsPage() {
 
       <section className="card p-4 text-sm">
         <h2 className="font-semibold">Email</h2>
-        <p className="mt-1 text-slate-600">
-          {mailEnabled() ? "Outgoing email is configured. Replies and assignment alerts are being sent." : "Outgoing email is not configured yet. Replies and alerts are only logged. Add SMTP settings to .env (see README) to turn it on."}
-        </p>
+        <dl className="mt-2 grid gap-x-4 gap-y-1.5 text-slate-600 sm:grid-cols-[9rem_1fr]">
+          <dt className="font-medium text-slate-800">Sending</dt>
+          <dd>{graphSender() ? <>Through Microsoft 365 as <b>{graphSender()}</b></> : mailEnabled() ? "Through SMTP" : "Not set up — emails are only logged. Set MS_TENANT_ID / MS_CLIENT_ID / MS_CLIENT_SECRET / MS_SEND_FROM (recommended for raybonchemicals.com) or SMTP_*."}</dd>
+          <dt className="font-medium text-slate-800">Email in</dt>
+          <dd>{graphConfigured() && graphInboxes().length ? <>Reading <b>{graphInboxes().join(", ")}</b> — {editionHasCrm && !editionHasHd ? "new mail becomes an enquiry" : editionHasHd && !editionHasCrm ? "new mail becomes a ticket (replies thread onto it)" : "sales@ → enquiry, others → ticket"}.</> : <>Not connected. With Microsoft 365 set up, add MS_INBOX (e.g. {editionHasHd && !editionHasCrm ? "support" : "sales"}@raybonchemicals.com). Any other mail service can also POST to <code className="text-xs">{appUrl()}/api/inbound-email</code>.</>}</dd>
+          {mbx && <><dt className="font-medium text-slate-800">Last check</dt><dd className={mbx.ok ? "" : "text-red-600"}>{new Date(mbx.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" })} — {mbx.detail}</dd></>}
+        </dl>
+        {graphConfigured() && <div className="mt-3"><RunButton action={checkMailboxNow} label="Check mailbox now" format="mailbox" /></div>}
       </section>
 
       {editionHasHd && <section className="card">

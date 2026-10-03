@@ -119,3 +119,48 @@ export async function deleteCanned(id: number) {
 
 const crmOf = (fd: FormData) => (["none", "own", "all"].includes(String(fd.get("crmAccess"))) ? String(fd.get("crmAccess")) : "none") as "none" | "own" | "all";
 const hdOf = (fd: FormData) => (["none", "zone", "all"].includes(String(fd.get("hdAccess"))) ? String(fd.get("hdAccess")) : "none") as "none" | "zone" | "all";
+
+export async function setNudgeRules(fd: FormData) {
+  await requireAdmin();
+  const { settings } = await import("@/db");
+  const n = (k: string, d: number, max: number) => Math.min(max, Math.max(1, Number(fd.get(k)) || d));
+  const value = JSON.stringify({ quoteDays: n("quoteDays", 7, 90), silenceDays: n("silenceDays", 14, 180), perPerson: n("perPerson", 5, 20) });
+  await db.insert(settings).values({ key: "nudge_rules", value }).onConflictDoUpdate({ target: settings.key, set: { value } });
+  done();
+}
+
+/** run the morning AI follow-up suggestions now (normally the daily cron does it) */
+export async function runNudgesNow() {
+  await requireAdmin();
+  const { findNudges, deliverNudges } = await import("@/lib/crm/nudges");
+  const r = await deliverNudges(await findNudges());
+  revalidatePath("/", "layout");
+  return r;
+}
+
+export async function setEnquiryAssign(fd: FormData) {
+  await requireAdmin();
+  const { settings } = await import("@/db");
+  const value = fd.getAll("userIds").map(Number).filter(Boolean).join(",");
+  await db.insert(settings).values({ key: "enquiry_assign_to", value }).onConflictDoUpdate({ target: settings.key, set: { value } });
+  done();
+}
+
+export async function checkMailboxNow() {
+  await requireAdmin();
+  const { graphConfigured } = await import("@/lib/core/graph");
+  if (!graphConfigured()) return { ok: false, error: "Microsoft 365 isn't set up yet." };
+  const { runMailbox } = await import("@/lib/core/inbound-router");
+  const r = await runMailbox();
+  done();
+  revalidatePath("/enquiries");
+  return r;
+}
+
+export async function setCaptureUsers(fd: FormData) {
+  await requireAdmin();
+  const { settings } = await import("@/db");
+  const value = fd.getAll("userIds").map(Number).filter(Boolean).join(",");
+  await db.insert(settings).values({ key: "capture_users", value }).onConflictDoUpdate({ target: settings.key, set: { value } });
+  done();
+}

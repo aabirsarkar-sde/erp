@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { asc, desc, eq, ne } from "drizzle-orm";
-import { db, leads, leadNotes, activities, quotations, documents, users } from "@/db";
+import { asc, desc, eq, isNotNull, ne } from "drizzle-orm";
+import { db, leads, leadNotes, activities, quotations, documents, users, templates, sites, trials, orders } from "@/db";
 import { requireUser } from "@/lib/core/auth";
 import { canSeeLead } from "@/lib/core/access";
 import { lookups } from "@/lib/core/lookups";
 import { getStages } from "@/lib/crm/queries";
-import { moveLead, markWon, markLost, reopenLead, convertToOpportunity, addLeadMember, removeLeadMember } from "@/app/actions/crm";
+import { moveLead, markLost, reopenLead, convertToOpportunity, addLeadMember, removeLeadMember } from "@/app/actions/crm";
 import { LeadDocUpload } from "@/components/crm/lead-docs";
 import { createQuotation } from "@/app/actions/quotations";
 import { LeadDetails } from "@/components/crm/lead-details";
@@ -22,6 +22,11 @@ import { TagEditor } from "@/components/crm/tag-editor";
 import { listTasks } from "@/lib/workspace/tasks";
 import { TaskList, TaskForm } from "@/components/workspace/tasks";
 import { ContactCard } from "@/components/crm/contact-card";
+import { SendPanel, ReminderForm } from "@/components/crm/send-panel";
+import { TrialForm, TrialRow, WonButton } from "@/components/crm/trials";
+import { scoreFor } from "@/lib/crm/score";
+import { graphInboxes } from "@/lib/core/graph";
+import { ScoreBadge } from "@/components/crm/score-badge";
 import { tagSuggestions } from "@/lib/crm/tags";
 import { Avatar } from "@/components/ui/ui";
 import { IconBack, IconPlus } from "@/components/ui/icons";
@@ -33,11 +38,12 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
   return { title: l?.title ?? "Opportunity" };
 }
 
-export default async function LeadPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function LeadPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ send?: string }> }) {
   const me = await requireUser();
   const id = Number((await params).id);
+  const sp = await searchParams;
   if (!Number.isFinite(id)) notFound();
-  const [ok, l, stages, lk, docs, salesUsers, tagDefsAll, tks] = await Promise.all([
+  const [ok, l, stages, lk, docs, salesUsers, tagDefsAll, tks, tpls, collateral, trialRows, orderRows, score] = await Promise.all([
     canSeeLead(me, id), // checked together with the data load — one round trip
     db.query.leads.findFirst({
       where: eq(leads.id, id),
@@ -57,7 +63,13 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
     db.select({ id: users.id, name: users.name }).from(users).where(ne(users.crmAccess, "none")).orderBy(asc(users.name)),
     tagSuggestions(),
     listTasks(me, { leadId: id }),
+    db.select({ id: templates.id, kind: templates.kind, name: templates.name, category: templates.category, subject: templates.subject, body: templates.body }).from(templates).orderBy(asc(templates.category), asc(templates.name)),
+    db.select({ id: documents.id, name: documents.name, category: documents.category }).from(documents).where(isNotNull(documents.category)).orderBy(asc(documents.name)),
+    db.select().from(trials).where(eq(trials.leadId, id)).orderBy(desc(trials.createdAt)),
+    db.select().from(orders).where(eq(orders.leadId, id)).orderBy(desc(orders.poDate)),
+    scoreFor([id]).then((m) => m.get(id) ?? null),
   ]);
+  const custSites = l?.customerId ? await db.select({ id: sites.id, name: sites.name, applications: sites.applications }).from(sites).where(eq(sites.customerId, l.customerId)).orderBy(asc(sites.name)) : [];
   if (!ok || !l) notFound();
   const age = daysBetween(l.createdAt, Date.now());
   const planned = l.activities.filter((a) => !a.doneAt);
@@ -84,6 +96,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
               <span className={`rounded-full px-2 py-0.5 text-xs font-bold uppercase ${l.status === "won" ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>{l.status}{l.lostReason ? ` · ${l.lostReason}` : ""}</span>
             )}
             <Stars n={l.priority} />
+            {score && l.status === "open" && <ScoreBadge s={score} />}
             {l.status === "open" ? (
               <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${ageTone(age)}`} title={`Created ${fmtDate(l.createdAt)}`}>Day {age}</span>
             ) : l.closedAt && (
@@ -96,7 +109,8 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             {l.customer ? <Link href={`/customers/${l.customer.id}`} className="font-medium text-slate-700 hover:underline">{l.customer.name}</Link> : l.companyName ?? "No customer"}
             {l.contactName && ` · ${l.contactName}`}{l.city && ` · ${l.city}`}{l.capacity && ` · ${l.capacity}`}
           </p>
-          {l.product && <p className="mt-0.5 text-sm text-slate-600">Offered: <b className="font-medium">{l.product}</b></p>}
+          {(l.product || l.application) && <p className="mt-0.5 text-sm text-slate-600">{l.product && <>Offered: <b className="font-medium">{l.product}</b></>}{l.application && <> · for <b className="font-medium">{l.application}</b></>}{custSites.find((x) => x.id === l.siteId) && <> · at {custSites.find((x) => x.id === l.siteId)!.name}</>}</p>}
+          {orderRows.map((o) => <p key={o.id} className="mt-1 text-sm font-medium text-emerald-700">📦 Order {o.poNumber ?? ""} · {inr(o.value)} · {fmtDate(o.poDate)}</p>)}
         </div>
         <div className="text-right">
           <div className="text-2xl font-semibold tabular-nums">{inr(l.expectedRevenue)}</div>
@@ -108,7 +122,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
         {l.kind === "lead" && <form action={convertToOpportunity.bind(null, l.id)}><button className="btn-primary">Convert to opportunity</button></form>}
         {l.status === "open" ? (
           <>
-            <form action={markWon.bind(null, l.id)}><button className="btn bg-emerald-600 text-white hover:bg-emerald-700">Won</button></form>
+            <WonButton leadId={l.id} value={l.expectedRevenue} />
             <details className="relative">
               <summary className="btn-secondary cursor-pointer list-none">Lost</summary>
               <form action={markLost.bind(null, l.id)} className="card absolute left-0 z-10 mt-1 w-64 space-y-2 p-3 shadow-lg">
@@ -141,6 +155,13 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
       <div className="grid gap-5 lg:grid-cols-3">
         <div className="space-y-5 lg:col-span-2">
           <ContactCard l={{ id: l.id, contactName: l.contactName, phone: l.phone, email: l.email, address: l.address, city: l.city }} />
+          <SendPanel leadId={l.id} phone={l.phone ?? l.customer?.phone ?? null} email={l.email ?? l.customer?.email ?? null} templates={tpls} collateral={collateral} ai={aiEnabled()} initialTab={sp.send === "email" ? "email" : "whatsapp"}
+            vars={{ contact: l.contactName, customer: l.customer?.name ?? l.companyName, product: l.product, opportunity: l.title, city: l.city, salesperson: me.name, salesperson_phone: me.phone }} />
+          <section className="card">
+            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">🧪 Technical evaluation & trials ({trialRows.length})</h2>
+            {trialRows.length > 0 && <ul className="divide-y divide-slate-100">{trialRows.map((t) => <TrialRow key={`${t.id}-${t.status}-${t.result}`} leadId={l.id} t={t} />)}</ul>}
+            <div className="border-t border-slate-100 bg-slate-50/60 p-3"><TrialForm leadId={l.id} /></div>
+          </section>
           <section className="card">
             <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">Planned activities ({planned.length})</h2>
             {planned.length > 0 && <ul className="divide-y divide-slate-100">{planned.map((a) => <ActivityItem key={a.id} a={{ ...a, userName: a.user?.name }} />)}</ul>}
@@ -191,7 +212,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
           </section>
 
           <section className="card">
-            <h2 className="border-b border-slate-100 px-4 py-3 text-sm font-semibold">History</h2>
+            <h2 className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-100 px-4 py-3 text-sm font-semibold">History<span className="text-[11px] font-normal text-slate-500">Log emails here: BCC {graphInboxes()[0] ?? "the sales mailbox"} with <code className="rounded bg-slate-100 px-1">[OPP-{l.id}]</code> in the subject</span></h2>
             <div className="border-b border-slate-100 p-4"><LeadNote leadId={l.id} /></div>
             <ol className="space-y-3 p-4">
               {timeline.map((t) =>
@@ -207,7 +228,7 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
                       <Avatar name={t.who} size="sm" /><b className="font-medium">{t.who}</b>
                       <span className="ml-auto text-slate-400">{fmtDateTime(t.at)}</span>
                     </div>
-                    <p className="whitespace-pre-wrap text-sm text-slate-700">{t.body}</p>
+                    <p className="whitespace-pre-wrap text-sm text-slate-700 [overflow-wrap:anywhere]">{t.body}</p>
                     {"href" in t && t.href && <Link href={t.href} className="mt-1 inline-block text-xs text-brand-700 hover:underline">Open report →</Link>}
                   </li>
                 ),
@@ -233,7 +254,14 @@ export default async function LeadPage({ params }: { params: Promise<{ id: strin
             </form>
             <p className="mt-2 text-xs text-slate-500">Followers and assignees can see this opportunity even if it isn&apos;t theirs.</p>
           </section>
-          <LeadDetails l={l} users={lk.users} customers={lk.customers} />
+          {(me.role === "admin" || me.crmAccess === "all") && l.status === "open" && (
+            <section className="card p-4">
+              <h3 className="mb-1 text-sm font-semibold">⏰ Remind someone</h3>
+              <p className="mb-2 text-xs text-slate-500">Goes into their calendar and notifications (and email).</p>
+              <ReminderForm leadId={l.id} users={salesUsers} defaultUserId={l.ownerId} customer={l.customer?.name ?? l.companyName ?? "this customer"} />
+            </section>
+          )}
+          <LeadDetails l={l} users={lk.users} customers={lk.customers} sites={custSites} />
         </aside>
       </div>
     </div>

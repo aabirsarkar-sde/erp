@@ -1,5 +1,6 @@
 import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
+import { graphSender, graphSendMail } from "@/lib/core/graph";
 
 // Any free SMTP works: Gmail (app password), Brevo (300/day free), Zoho, etc.
 // Without SMTP_HOST, emails are printed to the server console instead of sent.
@@ -20,6 +21,11 @@ export const appUrl = () => (process.env.APP_URL || "http://localhost:3000").rep
 export type Mail = { to: string; subject: string; text: string; replyTo?: string; attachments?: { filename: string; content: Buffer; contentType?: string }[] };
 
 export async function sendMail(m: Mail): Promise<{ sent: boolean; error?: string }> {
+  // Microsoft 365 via Graph when configured (MS_* env) — no SMTP password needed
+  if (graphSender()) {
+    try { await graphSendMail({ ...m, replyTo: m.replyTo || process.env.SUPPORT_EMAIL || undefined }); return { sent: true }; }
+    catch (e) { console.error("graph sendMail failed", e); return { sent: false, error: (e as Error).message }; }
+  }
   const t = getTransport();
   const from = process.env.MAIL_FROM || "Raybon Support <support@example.com>";
   const replyTo = m.replyTo || process.env.SUPPORT_EMAIL || undefined;
@@ -36,4 +42,4 @@ export async function sendMail(m: Mail): Promise<{ sent: boolean; error?: string
   }
 }
 
-export const mailEnabled = () => !!process.env.SMTP_HOST;
+export const mailEnabled = () => !!process.env.SMTP_HOST || !!graphSender();

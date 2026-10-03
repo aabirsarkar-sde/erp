@@ -5,7 +5,7 @@ One codebase, deployed as **two separate products**:
 
 | Product | `APP_EDITION` | For | Main modules |
 |---|---|---|---|
-| **Raybon Sales CRM** (blue) | `crm` | Sales & Marketing | Leads, opportunities (labels, day counter, kanban views), calendar planner / work done / diary, daily report, proposals, quotations, dashboards |
+| **Raybon Sales CRM** (blue) | `crm` | Sales & Marketing | Enquiries inbox (web, email, WhatsApp), leads, opportunities (labels, day counter, kanban views), colour-coded calendar planner / work done / diary, daily report, KPI & KRA, saved dashboards, AI follow-up suggestions, templates & collateral, proposals, quotations |
 | **Raybon O&M Helpdesk** (teal) | `helpdesk` | Operations & Maintenance | Complaints/tickets by zone, plants, TAT, SLA, helpdesk dashboard, customer portal |
 
 Both include Calendar, Tasks, Discuss (chat), Documents, Customers, Ask AI, Insights and Settings. Each product has its own

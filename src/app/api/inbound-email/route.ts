@@ -1,8 +1,10 @@
-import { handleInbound, type InboundEmail } from "@/lib/helpdesk/inbound";
+import type { InboundEmail } from "@/lib/helpdesk/inbound";
+import { handleIncomingMail } from "@/lib/core/inbound-router";
 import { revalidatePath } from "next/cache";
 
-// POST JSON { from, subject, text, attachments?: [{ filename, contentType, content(base64) }] }
+// POST JSON { from, to?, subject, text, messageId?, attachments?: [{ filename, contentType, content(base64) }] }
 // Auth: header "x-inbound-secret" (or ?secret=) must equal INBOUND_EMAIL_SECRET.
+// Helpdesk build → creates / updates a ticket. CRM build → lands in the Enquiries inbox.
 export async function POST(req: Request) {
   const secret = process.env.INBOUND_EMAIL_SECRET;
   const given = req.headers.get("x-inbound-secret") || new URL(req.url).searchParams.get("secret");
@@ -14,7 +16,7 @@ export async function POST(req: Request) {
     return Response.json({ error: "invalid json" }, { status: 400 });
   }
   if (!mail?.from) return Response.json({ error: "missing from" }, { status: 400 });
-  const r = await handleInbound(mail);
+  const r = await handleIncomingMail(mail);
   revalidatePath("/", "layout");
   return Response.json(r);
 }

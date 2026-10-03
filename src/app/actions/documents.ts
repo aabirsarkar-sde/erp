@@ -14,11 +14,13 @@ export async function uploadDocuments(_p: { ok?: boolean; error?: string } | und
   const folderId = Number(fd.get("folderId")) || null;
   const customerId = Number(fd.get("customerId")) || null;
   const description = String(fd.get("description") ?? "").trim() || null;
+  const category = String(fd.get("category") ?? "").trim() || null; // sales collateral (templates box)
   for (const f of files) {
     const storageKey = await saveFile(f);
-    await db.insert(documents).values({ name: f.name, mime: f.type || "application/octet-stream", size: f.size, storageKey, folderId, customerId, description, uploadedById: me.id });
+    await db.insert(documents).values({ name: f.name, mime: f.type || "application/octet-stream", size: f.size, storageKey, folderId, customerId, description, category, uploadedById: me.id });
   }
   revalidatePath("/documents");
+  if (category) revalidatePath("/templates");
   if (customerId) revalidatePath(`/customers/${customerId}`);
   return { ok: true };
 }
@@ -41,6 +43,7 @@ export async function deleteDocument(id: number) {
   if (!d || (d.uploadedById !== me.id && me.role !== "admin")) return;
   await db.delete(documents).where(eq(documents.id, id));
   revalidatePath("/documents");
+  if (d.category) revalidatePath("/templates");
 }
 
 export async function createFolder(fd: FormData) {
